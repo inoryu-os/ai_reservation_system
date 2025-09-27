@@ -17,48 +17,6 @@ export function getElements() {
 }
 
 /**
- * メッセージを表示
- * @param {string} message 表示メッセージ
- * @param {boolean} isSuccess 成功メッセージかどうか
- */
-export function showMessage(message, isSuccess = true) {
-  const alertClass = isSuccess ? 'alert-success' : 'alert-danger';
-  const alertHtml = `
-    <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
-      ${message}
-      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
-    </div>
-  `;
-
-  // 既存のアラートを削除
-  const existingAlert = document.querySelector('.alert');
-  if (existingAlert) {
-    existingAlert.remove();
-  }
-
-  // 新しいアラートを挿入
-  const form = document.getElementById('reservation-form');
-  form.insertAdjacentHTML('beforebegin', alertHtml);
-}
-
-/**
- * ボタンのローディング状態を設定
- * @param {HTMLElement} button
- * @param {boolean} isLoading
- * @param {string} loadingText
- */
-export function setButtonLoadingState(button, isLoading, loadingText = '処理中...') {
-  if (isLoading) {
-    button.dataset.originalText = button.innerHTML;
-    button.innerHTML = `<i class="fas fa-spinner fa-spin me-2"></i>${loadingText}`;
-    button.disabled = true;
-  } else {
-    button.innerHTML = button.dataset.originalText || button.innerHTML;
-    button.disabled = false;
-  }
-}
-
-/**
  * フォームからデータを取得
  * @param {HTMLFormElement} form
  * @returns {object}
