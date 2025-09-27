@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import List
 
 from sqlalchemy import (
-    create_engine, Integer, String, DateTime, ForeignKey, CheckConstraint, select
+    create_engine, Integer, String, DateTime, ForeignKey, select
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker, Session
 
@@ -54,18 +54,14 @@ def _seed_rooms(session: Session) -> None:
     to_add = [Room(**d) for d in ROOMS_CONFIG if d["name"] not in existing_names]
     if to_add:
         session.add_all(to_add)
+        session.commit()
 
-def init_db() -> None:
+def init_db() -> List[Room]:
     """定義済みテーブルの作成 + 初期データ投入（idempotent）"""
     Base.metadata.create_all(bind=engine)
     # トランザクション境界：成功ならコミット、例外なら自動ロールバック
     with get_session() as session:
         _seed_rooms(session)
-        session.commit()
-
-def get_all_rooms() -> List[Room]:
-    """roomsテーブルからすべてのデータを取得する"""
-    with get_session() as session:
         return session.query(Room).all()
 
 
