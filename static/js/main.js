@@ -1,7 +1,7 @@
 import { generateTimeOptions, populateSelect } from "./time.js";
 import { createReservation, getReservationsByDate, cancelReservation as apiCancelReservation} from "./api.js";
 import { displayReservationInTable, displayReservationsInTable, clearBookingTable } from "./bookingTable.js";
-import { getElements, showMessage, setButtonLoadingState, getFormData, showConfirm, resetForm } from "./ui.js";
+import { getElements, setButtonLoadingState, getFormData, showConfirm, resetForm } from "./ui.js";
 
 /**
  * 今日の予約を読み込み表示
@@ -34,11 +34,8 @@ async function handleReservationSubmit(event, form, submitButton) {
   setButtonLoadingState(submitButton, false);
 
   if (result.success) {
-    showMessage(result.message, true);
     displayReservationInTable(result.reservation, true);
     resetForm(form);
-  } else {
-    showMessage(result.error, false);
   }
 }
 
@@ -58,10 +55,8 @@ async function handleCancelClick(event) {
   const result = await apiCancelReservation(reservationId);
 
   if (result.success) {
-    showMessage(result.message, true);
     await loadTodaysReservations();
   } else {
-    showMessage(result.error, false);
     setButtonLoadingState(event.target, false);
   }
 }
