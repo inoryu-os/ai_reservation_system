@@ -65,11 +65,3 @@ export async function cancelReservation(reservationId) {
     method: 'DELETE'
   });
 }
-
-/**
- * 今日の日付を取得（YYYY-MM-DD形式）
- * @returns {string}
- */
-export function getTodayDate() {
-  return new Date().toISOString().split('T')[0];
-}

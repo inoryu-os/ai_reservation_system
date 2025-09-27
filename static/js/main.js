@@ -1,5 +1,5 @@
 import { generateTimeOptions, populateSelect } from "./time.js";
-import { createReservation, getReservationsByDate, cancelReservation as apiCancelReservation, getTodayDate } from "./api.js";
+import { createReservation, getReservationsByDate, cancelReservation as apiCancelReservation} from "./api.js";
 import { displayReservationInTable, displayReservationsInTable, clearBookingTable } from "./bookingTable.js";
 import { getElements, showMessage, setButtonLoadingState, getFormData, showConfirm, resetForm } from "./ui.js";
 
@@ -7,7 +7,7 @@ import { getElements, showMessage, setButtonLoadingState, getFormData, showConfi
  * 今日の予約を読み込み表示
  */
 async function loadTodaysReservations() {
-  const today = getTodayDate();
+  const today = new Date().toISOString().split('T')[0];
   const result = await getReservationsByDate(today);
 
   if (result.success) {
