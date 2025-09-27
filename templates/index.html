@@ -83,7 +83,7 @@
                                     <div class="row mb-3">
                                         <div class="col-md-6">
                                             <label for="room-select" class="form-label">会議室</label>
-                                            <select id="room-select" name="room-id" class="form-select" required aria-describedby="room-help">
+                                            <select id="room-select" name="room-id" class="form-select" required>
                                                 <option value="">選択してください</option>
                                                 {% for room in rooms %}
                                                 <option value="{{ room.id }}">{{ room.name }} ({{ room.capacity }}名)</option>
@@ -94,17 +94,17 @@
                                     <div class="row g-3 mb-3">
                                         <div class="col-md-4">
                                             <label for="date-select" class="form-label">日付</label>
-                                            <input type="date" id="date-select" class="form-control" name="date" required aria-describedby="date-help">
+                                            <input type="date" id="date-select" class="form-control" name="date" required>
                                         </div>
                                         <div class="col-md-4">
                                             <label for="start-time" class="form-label">開始時刻</label>
-                                            <select id="start-time" name="start-time" class="form-select" required aria-describedby="start-time-help">
+                                            <select id="start-time" name="start-time" class="form-select" required>
                                                 <option value="">開始時刻</option>
                                             </select>
                                         </div>
                                         <div class="col-md-4">
                                             <label for="end-time" class="form-label">終了時刻</label>
-                                            <select id="end-time" name="end-time" class="form-select" required aria-describedby="end-time-help">
+                                            <select id="end-time" name="end-time" class="form-select" required>
                                                 <option value="">終了時刻</option>
                                             </select>
                                         </div>
@@ -130,13 +130,6 @@
                             <i class="fas fa-table me-2" aria-hidden="true"></i>
                             <span id="booking-table-date">今日</span>の予約状況
                         </h2>
-                        <div class="btn-group" role="group" aria-label="テーブル操作">
-                            <button type="button" class="btn btn-sm btn-outline-secondary" id="today-btn" aria-label="今日の予約を表示">今日</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" id="refresh-btn" aria-label="更新">
-                                <i class="fas fa-sync-alt" aria-hidden="true"></i>
-                                <span class="visually-hidden">更新</span>
-                            </button>
-                        </div>
                     </div>
                     <div class="card-body p-0">
                         <div class="table-responsive">
@@ -207,7 +200,7 @@
                         <div class="chat-input-container border-top p-2">
                             <form id="chat-form" class="d-flex" role="form" aria-label="メッセージ送信">
                                 <label for="chat-input" class="visually-hidden">メッセージを入力</label>
-                                <input type="text" id="chat-input" class="form-control" placeholder="メッセージを入力..." maxlength="500" autocomplete="off" aria-describedby="chat-input-help">
+                                <input type="text" id="chat-input" class="form-control" placeholder="メッセージを入力..." maxlength="500" autocomplete="off">
                                 <div id="chat-input-help" class="visually-hidden">AIアシスタントにメッセージを送信します</div>
                                 <button type="submit" class="btn btn-primary ms-2" id="chat-send-btn" disabled aria-label="メッセージを送信">
                                     <i class="fas fa-paper-plane" aria-hidden="true"></i>
