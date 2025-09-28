@@ -20,19 +20,25 @@ zerobase_AI/
 ├── ai_service.py          # OpenAI API統合サービス
 ├── reservation_service.py # 予約管理ビジネスロジック
 ├── models.py              # データベースモデル
+├── timezone_utils.py      # タイムゾーン処理ユーティリティ
 ├── requirements.txt       # Python依存関係
 ├── .env                   # 環境変数設定
 ├── config/
 │   └── rooms.py          # 会議室設定
 ├── templates/
 │   └── index.html        # メインUI
-└── static/
-    └── js/
-        ├── main.js       # メイン JavaScript
-        ├── chat.js       # AIチャット機能
-        ├── api.js        # API通信
-        ├── ui.js         # UI操作
-        └── bookingTable.js # 予約表管理
+├── static/
+│   └── js/
+│       ├── main.js       # メイン JavaScript
+│       ├── chat.js       # AIチャット機能
+│       ├── api.js        # API通信
+│       ├── ui.js         # UI操作
+│       ├── timezone.js   # フロントエンド用タイムゾーン処理
+│       ├── bookingTable.js # 予約表管理
+│       └── config.js     # 設定定数
+├── README.md             # プロジェクト概要
+├── TECHNICAL_DOCS.md     # 技術仕様書
+└── DEPLOYMENT.md         # デプロイメント・運用ガイド
 ```
 
 ## 必要な依存関係
@@ -195,24 +201,21 @@ self.client = AzureOpenAI(
 model=self.deployment_name  # "gpt-3.5-turbo" → デプロイメント名
 ```
 
-## タイムゾーンに関する注意事項
+## タイムゾーン対応
 
-### 既知の問題
+### JST統一実装済み
 
-現在のシステムには以下のタイムゾーン関連の潜在的な問題があります：
+システム全体でJST（日本標準時）に統一されています：
 
-1. **フロントエンド**: `new Date().toISOString()` (UTC基準)
-2. **バックエンド**: `datetime.now()` (システムタイムゾーン基準)
-3. **データベース**: naive datetime (タイムゾーン情報なし)
+1. **バックエンド**: `timezone_utils.py` でJST処理を統一
+2. **フロントエンド**: `timezone.js` でJST時刻取得・表示
+3. **データベース**: JSTタイムゾーン付きdatetimeで保存
 
-### 影響
+### 主要機能
 
-- 午前0:00-9:00 (JST) の時間帯で日付の不整合が発生する可能性
-- 国際展開時にタイムゾーンの問題が顕在化
-
-### 推奨対応
-
-将来的にはJST統一またはUTC統一 + タイムゾーン変換の実装を推奨。
+- **自動JST変換**: UTC時刻をJSTに自動変換
+- **統一表示**: 全ての時刻表示がJST基準
+- **日付処理**: 今日・明日の判定がJST基準
 
 ## トラブルシューティング
 
@@ -249,9 +252,18 @@ model=self.deployment_name  # "gpt-3.5-turbo" → デプロイメント名
 
 ## 更新履歴
 
+### v1.2.0 (2025-09-28)
+- JST統一タイムゾーン対応実装
+- 予約フォーム・AIチャット双方のエラーハンドリング強化
+- フロントエンド・バックエンド全体でのタイムゾーン統一
+
+### v1.1.0 (2025-09-28)
+- 日本語入力IME対応改善（compositionstart/end対応）
+- 予約表の自動更新機能修正
+- HTTPステータスコード処理強化
+
 ### v1.0.0 (2025-09-28)
 - 初回リリース
 - AIチャット機能実装
 - Function Calling対応
 - 日本語入力UI改善
-- タイムゾーン問題の調査・文書化

@@ -2,6 +2,11 @@ from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# タイムゾーンをJSTに設定
+from timezone_utils import setup_timezone
+setup_timezone()
+
 import models
 from reservation_service import ReservationService
 from ai_service import AIService
@@ -56,7 +61,7 @@ def get_reservations_by_date(date):
 @app.route('/api/reservations/<int:reservation_id>', methods=['DELETE'])
 def cancel_reservation(reservation_id):
     """予約キャンセルAPI"""
-    result = ReservationService.cancel_reservation(reservation_id, user_name)
+    result = ReservationService.cancel_reservation(reservation_id)
 
     if result["success"]:
         return jsonify(result)

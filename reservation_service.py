@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from sqlalchemy import select
 import models
+from timezone_utils import JST, parse_datetime_jst, format_jst_date, format_jst_time, get_jst_now, convert_to_jst
 
 
 class ReservationService:
@@ -35,9 +36,9 @@ class ReservationService:
             if not validation_result["valid"]:
                 return {"success": False, "error": validation_result["error"]}
 
-            # 日時変換
-            start_datetime = datetime.strptime(f"{date} {start_time}", "%Y-%m-%d %H:%M")
-            end_datetime = datetime.strptime(f"{date} {end_time}", "%Y-%m-%d %H:%M")
+            # 日時変換（JSTで処理）
+            start_datetime = parse_datetime_jst(date, start_time)
+            end_datetime = parse_datetime_jst(date, end_time)
 
             # 時間の妥当性チェック
             if start_datetime >= end_datetime:
@@ -58,7 +59,7 @@ class ReservationService:
                 session.add(reservation)
                 session.commit()
 
-                room = session.scalars(select(models.Room).where(models.Room.id == room_id)).first()
+                room = session.get(models.Room, room_id)
 
                 return {
                     "success": True,
@@ -91,24 +92,30 @@ class ReservationService:
             取得結果とデータ
         """
         try:
-            target_date = datetime.strptime(date, "%Y-%m-%d").date()
+            # JSTで日付処理
+            target_date_jst = parse_datetime_jst(date, "00:00")
+            next_day_jst = target_date_jst + timedelta(days=1)
 
             with models.get_session() as session:
                 stmt = select(models.Reservation).join(models.Room).where(
-                    models.Reservation.start_time >= datetime.combine(target_date, datetime.min.time()),
-                    models.Reservation.start_time < datetime.combine(target_date, datetime.min.time()) + timedelta(days=1)
+                    models.Reservation.start_time >= target_date_jst,
+                    models.Reservation.start_time < next_day_jst
                 )
                 reservations = session.scalars(stmt).all()
 
                 result = []
                 for reservation in reservations:
+                    # データベースから取得した時刻をJSTに変換して表示
+                    start_time_jst = convert_to_jst(reservation.start_time)
+                    end_time_jst = convert_to_jst(reservation.end_time)
+
                     result.append({
                         "id": reservation.id,
                         "room_id": reservation.room_id,
                         "room_name": reservation.room.name,
                         "user_name": reservation.user_name,
-                        "start_time": reservation.start_time.strftime("%H:%M"),
-                        "end_time": reservation.end_time.strftime("%H:%M"),
+                        "start_time": format_jst_time(start_time_jst),
+                        "end_time": format_jst_time(end_time_jst),
                         "date": date
                     })
 
@@ -120,13 +127,12 @@ class ReservationService:
             return {"success": False, "error": f"サーバーエラーが発生しました: {str(e)}"}
 
     @staticmethod
-    def cancel_reservation(reservation_id: int, user_name: str) -> Dict[str, Any]:
+    def cancel_reservation(reservation_id: int) -> Dict[str, Any]:
         """
         予約をキャンセルする
 
         Args:
             reservation_id: 予約ID
-            user_name: ユーザー名（権限確認用）
 
         Returns:
             キャンセル結果
@@ -139,9 +145,6 @@ class ReservationService:
 
                 if not reservation:
                     return {"success": False, "error": "予約が見つかりません"}
-
-                if reservation.user_name != user_name:
-                    return {"success": False, "error": "他のユーザーの予約はキャンセルできません"}
 
                 session.delete(reservation)
                 session.commit()

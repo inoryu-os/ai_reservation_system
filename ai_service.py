@@ -1,11 +1,11 @@
 import os
 import json
-import re
 import requests
 from datetime import datetime, timedelta
 from openai import OpenAI
 from reservation_service import ReservationService
 import models
+from timezone_utils import JST, get_jst_now, format_jst_date
 
 class AIService:
     def __init__(self):
@@ -25,9 +25,9 @@ class AIService:
             rooms = models.get_rooms()
             room_info = "\n".join([f"- {room.name} (ID: {room.id}, 定員: {room.capacity}名)" for room in rooms])
 
-            # 現在の日時
-            now = datetime.now()
-            today = now.strftime("%Y-%m-%d")
+            # 現在の日時（JST）
+            now = get_jst_now()
+            today = format_jst_date(now)
 
             # Function Callingの定義
             functions = [
@@ -95,10 +95,10 @@ class AIService:
 利用可能な会議室:
 {room_info}
 
-現在の日時: {now.strftime("%Y年%m月%d日 %H:%M")}
+現在の日時: {now.strftime("%Y年%m月%d日 %H:%M")} (JST)
 
 日時の解析ルール:
-- 「明日」= {(now + timedelta(days=1)).strftime("%Y-%m-%d")}
+- 「明日」= {format_jst_date(now + timedelta(days=1))}
 - 「今日」= {today}
 - 時間は24時間形式で解析してください
 - 期間が指定されない場合は1時間としてください
@@ -124,11 +124,11 @@ class AIService:
                 function_args = json.loads(response.choices[0].message.function_call.arguments)
 
                 if function_name == "create_reservation":
-                    return self._call_create_reservation_api(function_args, user_name)
+                    return self._call_create_reservation_api(function_args)
                 elif function_name == "get_reservations":
                     return self._call_get_reservations_api(function_args)
                 elif function_name == "cancel_reservation":
-                    return self._call_cancel_reservation_api(function_args, user_name)
+                    return self._call_cancel_reservation_api(function_args)
 
             # 通常の応答
             return {
@@ -144,7 +144,7 @@ class AIService:
                 "response": "申し訳ありませんが、システムエラーが発生しました。"
             }
 
-    def _call_create_reservation_api(self, args, user_name):
+    def _call_create_reservation_api(self, args):
         """REST APIを呼び出して予約を作成"""
         try:
             url = f"{self.base_url}/api/reserve"
@@ -218,7 +218,7 @@ class AIService:
                 "response": "確認処理中にエラーが発生しました。"
             }
 
-    def _call_cancel_reservation_api(self, args, user_name):
+    def _call_cancel_reservation_api(self, args):
         """REST APIを呼び出して予約をキャンセル"""
         try:
             url = f"{self.base_url}/api/reservations/{args['reservation_id']}"

@@ -39,6 +39,7 @@ DATABASE_URL=postgresql://user:password@localhost/meeting_rooms
 OPENAI_API_KEY=your_production_api_key
 FLASK_ENV=production
 SECRET_KEY=your_secret_key_here
+TZ=Asia/Tokyo  # JST タイムゾーン設定
 ```
 
 #### 3. WSGI サーバー設定 (Gunicorn)
@@ -76,6 +77,7 @@ User=www-data
 Group=www-data
 WorkingDirectory=/var/www/meeting-room
 Environment=PATH=/var/www/meeting-room/venv/bin
+Environment=TZ=Asia/Tokyo
 ExecStart=/var/www/meeting-room/venv/bin/gunicorn --config gunicorn.conf.py app:app
 Restart=always
 

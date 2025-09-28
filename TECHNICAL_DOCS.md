@@ -393,6 +393,50 @@ logging.basicConfig(
 )
 ```
 
+## タイムゾーン実装詳細
+
+### アーキテクチャ
+
+システム全体でJST（日本標準時）に統一：
+
+```python
+# timezone_utils.py
+JST = timezone(timedelta(hours=9))
+
+def get_jst_now() -> datetime:
+    """現在のJST時刻を取得"""
+    return datetime.now(JST)
+
+def parse_datetime_jst(date_str: str, time_str: str) -> datetime:
+    """日付文字列と時刻文字列をJSTのdatetimeに変換"""
+    datetime_str = f"{date_str} {time_str}"
+    return datetime.strptime(datetime_str, "%Y-%m-%d %H:%M").replace(tzinfo=JST)
+```
+
+### フロントエンド実装
+
+```javascript
+// timezone.js
+const JST_OFFSET = 9 * 60; // 分単位
+
+export function getJSTNow() {
+  const now = new Date();
+  return convertToJST(now);
+}
+
+export function getTodayJST() {
+  return formatJSTDate(getJSTNow());
+}
+```
+
+### 統一された処理フロー
+
+1. **データ入力**: フロントエンドでJST日付入力
+2. **API送信**: JST形式で送信
+3. **バックエンド処理**: JSTで解析・保存
+4. **データベース**: JST付きdatetimeで保存
+5. **表示**: JST形式で表示
+
 ## 既知の制限事項
 
 ### 1. 同時アクセス
