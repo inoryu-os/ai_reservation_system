@@ -4,6 +4,7 @@
 
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
+from sqlalchemy import select
 import models
 
 
@@ -57,7 +58,7 @@ class ReservationService:
                 session.add(reservation)
                 session.commit()
 
-                room = session.query(models.Room).filter(models.Room.id == room_id).first()
+                room = session.scalars(select(models.Room).where(models.Room.id == room_id)).first()
 
                 return {
                     "success": True,
@@ -93,10 +94,11 @@ class ReservationService:
             target_date = datetime.strptime(date, "%Y-%m-%d").date()
 
             with models.get_session() as session:
-                reservations = session.query(models.Reservation).join(models.Room).filter(
+                stmt = select(models.Reservation).join(models.Room).where(
                     models.Reservation.start_time >= datetime.combine(target_date, datetime.min.time()),
                     models.Reservation.start_time < datetime.combine(target_date, datetime.min.time()) + timedelta(days=1)
-                ).all()
+                )
+                reservations = session.scalars(stmt).all()
 
                 result = []
                 for reservation in reservations:
@@ -131,8 +133,8 @@ class ReservationService:
         """
         try:
             with models.get_session() as session:
-                reservation = session.query(models.Reservation).filter(
-                    models.Reservation.id == reservation_id
+                reservation = session.scalars(
+                    select(models.Reservation).where(models.Reservation.id == reservation_id)
                 ).first()
 
                 if not reservation:
@@ -162,12 +164,14 @@ class ReservationService:
         return {"valid": True}
 
     @staticmethod
-    def _check_conflict(session, room_id: int, start_datetime: datetime, end_datetime: datetime) -> bool:
+    def _check_conflict(session, room_id: int, new_start_time: datetime, new_end_time: datetime) -> bool:
         """時間重複をチェック"""
-        existing = session.query(models.Reservation).filter(
-            models.Reservation.room_id == room_id,
-            models.Reservation.start_time < end_datetime,
-            models.Reservation.end_time > start_datetime
+        existing = session.scalars(
+            select(models.Reservation).where(
+                models.Reservation.room_id == room_id,
+                models.Reservation.start_time < new_end_time,
+                models.Reservation.end_time > new_start_time
+            )
         ).first()
 
         return existing is not None
