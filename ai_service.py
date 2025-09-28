@@ -147,7 +147,7 @@ class AIService:
     def _call_create_reservation_api(self, args):
         """REST APIを呼び出して予約を作成"""
         try:
-            url = f"{self.base_url}/api/reserve"
+            url = f"{self.base_url}/api/reservations"
             data = {
                 "room-id": str(args["room_id"]),
                 "date": args["date"],

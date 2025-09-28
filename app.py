@@ -20,7 +20,7 @@ def index():
     rooms = models.init_db()
     return render_template('index.html', rooms=rooms, user_name=user_name)
 
-@app.route('/api/reserve', methods=['POST'])
+@app.route('/api/reservations', methods=['POST'])
 def create_reservation():
     """予約作成API"""
     data = request.get_json(silent=False)

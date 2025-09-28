@@ -3,6 +3,7 @@
  */
 import { TIME } from "./config.js";
 
+
 /**
  * DOM要素を取得
  * @returns {object}

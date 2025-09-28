@@ -3,7 +3,6 @@
  */
 
 const API_ENDPOINTS = {
-  RESERVE: '/api/reserve',
   RESERVATIONS: '/api/reservations',
 };
 
@@ -40,7 +39,7 @@ async function fetchAPI(url, options = {}) {
  * @returns {Promise<object>}
  */
 export async function createReservation(reservationData) {
-  return await fetchAPI(API_ENDPOINTS.RESERVE, {
+  return await fetchAPI(API_ENDPOINTS.RESERVATIONS, {
     method: 'POST',
     body: JSON.stringify(reservationData)
   });
