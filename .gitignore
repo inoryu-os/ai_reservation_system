@@ -1,0 +1,42 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python bytecode/cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+
+# Environment variables
+.env
+.env.*
+
+# Databases
+meeting_rooms.db
+*.db
+*.sqlite
+*.sqlite3
+
+# Build/packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs
+*.log
+
+# IDE/editor
+.vscode/
+.idea/
+.pytest_cache/
+.coverage
+coverage.xml
+
+# Node (if ever used)
+node_modules/
+*.tsbuildinfo

@@ -40,7 +40,7 @@ class AIService:
         """メイン処理: ユーザーメッセージを解析しAPIを呼び出し"""
 
     def _call_create_reservation_api(args, user_name):
-        """予約作成API呼び出し"""
+        """予約作成API呼び出し（/api/reservations）"""
 
     def _call_get_reservations_api(args):
         """予約一覧取得API呼び出し"""
@@ -126,8 +126,8 @@ class Reservation(Base):
 ```javascript
 // main.js - エントリーポイント
 import { createReservation, getReservationsByDate } from "./api.js";
-import { displayReservationInTable } from "./bookingTable.js";
-import { getElements, generateTimeOptions } from "./ui.js";
+import { ReservationTable } from "./reservationTable.js";
+import { FormUI } from "./formUI.js";
 import "./chat.js";
 
 // chat.js - AIチャット機能
@@ -145,7 +145,7 @@ class ChatManager {
 
 #### 予約作成
 ```http
-POST /api/reserve
+POST /api/reservations
 Content-Type: application/json
 
 {
@@ -245,6 +245,7 @@ updateSendButton() {
     this.charCounter.textContent = `${length}/500`;
 
     // 段階的な警告表示
+    this.charCounter.classList.remove('text-danger', 'text-warning', 'text-muted');
     if (length > 480) {
         this.charCounter.classList.add('text-danger');
     } else if (length > 400) {

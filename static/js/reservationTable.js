@@ -3,6 +3,7 @@
  */
 import { getReservationsByDate, cancelReservation } from "./api.js";
 import { getJSTNow, getTodayJST } from "./timezone.js";
+import { TIME } from "./config.js";
 
 export class ReservationTable {
   constructor() {
@@ -129,10 +130,11 @@ export class ReservationTable {
   }
 
   generateTimeSlots() {
+    const { startHour, endHour, stepMinutes } = TIME;
     const slots = [];
-    for (let hour = 7; hour < 23; hour++) {
-      for (let min = 0; min < 60; min += 30) {
-        if (hour === 22 && min === 30) break; // 22:30で終了
+    for (let hour = startHour; hour <= endHour; hour++) {
+      for (let min = 0; min < 60; min += stepMinutes) {
+        if (hour === endHour && min === 30) break; // 22:30で終了
         slots.push({ hour, min });
       }
     }

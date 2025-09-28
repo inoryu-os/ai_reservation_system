@@ -29,13 +29,13 @@ zerobase_AI/
 │   └── index.html        # メインUI
 ├── static/
 │   └── js/
-│       ├── main.js       # メイン JavaScript
-│       ├── chat.js       # AIチャット機能
-│       ├── api.js        # API通信
-│       ├── ui.js         # UI操作
-│       ├── timezone.js   # フロントエンド用タイムゾーン処理
-│       ├── bookingTable.js # 予約表管理
-│       └── config.js     # 設定定数
+│       ├── main.js           # メイン JavaScript
+│       ├── chat.js           # AIチャット機能
+│       ├── api.js            # API通信
+│       ├── formUI.js         # フォームUI操作
+│       ├── timezone.js       # フロントエンド用タイムゾーン処理
+│       ├── reservationTable.js # 予約表管理
+│       └── config.js         # 設定定数
 ├── README.md             # プロジェクト概要
 ├── TECHNICAL_DOCS.md     # 技術仕様書
 └── DEPLOYMENT.md         # デプロイメント・運用ガイド
@@ -48,7 +48,7 @@ Flask==2.3.3
 python-dotenv==1.0.0
 requests==2.31.0
 SQLAlchemy==2.0.32
-openai==1.109.1
+openai==1.12.0
 ```
 
 ## 環境設定
@@ -89,7 +89,7 @@ python app.py
 
 ### 予約管理 API
 
-- `POST /api/reserve` - 新規予約作成
+- `POST /api/reservations` - 新規予約作成
 - `GET /api/reservations/<date>` - 指定日の予約一覧取得
 - `DELETE /api/reservations/<id>` - 予約キャンセル
 
@@ -105,7 +105,7 @@ AIが以下の操作を自動実行できます：
 
 1. **予約作成** (`create_reservation`)
    - 会議室ID、日付、開始時刻、終了時刻を解析
-   - REST API `/api/reserve` を呼び出し
+   - REST API `/api/reservations` を呼び出し
 
 2. **予約確認** (`get_reservations`)
    - 指定日付を解析

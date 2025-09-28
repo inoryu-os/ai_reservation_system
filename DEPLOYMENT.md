@@ -47,6 +47,7 @@ TZ=Asia/Tokyo  # JST タイムゾーン設定
 ```bash
 # requirements.txt に追加
 echo "gunicorn==21.2.0" >> requirements.txt
+echo "psycopg2-binary==2.9.7" >> requirements.txt
 pip install gunicorn
 
 # Gunicorn設定ファイル (gunicorn.conf.py)
@@ -188,7 +189,8 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now().isoformat(),
-        'version': '1.0.0'
+        'version': '1.2.0',
+        'timezone': 'JST'
     })
 ```
 
@@ -436,10 +438,15 @@ sudo systemctl start meeting-room
 # ヘルスチェック
 curl http://localhost:8000/health
 
-# 機能テスト
+# AIチャット機能テスト
 curl -X POST http://localhost:8000/api/chat \
      -H "Content-Type: application/json" \
-     -d '{"message": "こんにちは"}'
+     -d '{"message": "今日の予約状況を教えてください"}'
+
+# 予約APIテスト
+curl -X POST http://localhost:8000/api/reservations \
+     -H "Content-Type: application/json" \
+     -d '{"room-id": "1", "date": "2025-09-29", "start-time": "14:00", "end-time": "15:00"}'
 ```
 
 ## 連絡先
