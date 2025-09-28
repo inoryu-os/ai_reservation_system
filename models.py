@@ -48,26 +48,39 @@ SessionLocal = sessionmaker(
 def get_session() -> Session:
     return SessionLocal()
 
-def _seed_rooms(session: Session) -> None:
-    """存在しない会議室だけを追加（何度呼んでも安全）"""
-    existing_names = set(session.execute(select(Room.name)).scalars())
-    to_add = [Room(**d) for d in ROOMS_CONFIG if d["name"] not in existing_names]
-    if to_add:
-        session.add_all(to_add)
-        session.commit()
+from typing import List
+from sqlalchemy import select
 
 def init_db() -> List[Room]:
-    """定義済みテーブルの作成 + 初期データ投入（idempotent）"""
+    """ROOMS_CONFIG と DB を同期（追加・削除）"""
     Base.metadata.create_all(bind=engine)
-    # トランザクション境界：成功ならコミット、例外なら自動ロールバック
+
     with get_session() as session:
-        _seed_rooms(session)
-        return session.query(Room).all()
+        cfg = {room["name"]: room["capacity"] for room in ROOMS_CONFIG}
+        names_cfg = set(cfg.keys())
+        names_db = set(session.execute(select(Room.name)).scalars())
+
+        # 追加：configにあるがDBにない部屋
+        to_add_name_set = names_cfg - names_db
+        if to_add_name_set:
+            to_add_rooms = [Room(name=to_add_name, capacity=cfg[to_add_name]) for to_add_name in to_add_name_set]
+            session.add_all(to_add_rooms)
+
+        # 削除：DBにあるがconfigにない部屋（Reservationはcascadeで一緒に削除）
+        to_delete_name_set = names_db - names_cfg
+        if to_delete_name_set:
+            to_delete_rooms = session.scalars(select(Room).where(Room.name.in_(to_delete_name_set))).all()
+            for to_delete in to_delete_rooms:
+                session.delete(to_delete)
+            
+        session.commit()
+        return session.scalars(select(Room)).all()
+
 
 def get_rooms() -> List[Room]:
     """全ての会議室を取得"""
     with get_session() as session:
-        return session.query(Room).all()
+        return session.scalars(select(Room)).all()
 
 
 if __name__ == "__main__":
