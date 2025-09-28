@@ -142,25 +142,7 @@
                                         {% endfor %}
                                     </tr>
                                 </thead>
-                                <tbody id="booking-table-body">
-                                        {% for hour in range(7, 23) %}
-                                            {% for min in [0, 30] %}
-                                                {% if not (hour == 22 and min == 30) %}
-                                                <tr>
-                                                    <!-- 時間セル -->
-                                                    <th class="text-center" scope="row">
-                                                        {{ "%02d:%02d"|format(hour, min) }}~
-                                                    </th>
-                                                    <!-- 部屋セル -->
-                                                    {% for room in rooms %}
-                                                    <td class="booking-cell">
-                                                    </td>
-                                                    {% endfor %}
-                                                </tr>
-                                                {% endif %}
-                                            {% endfor %}
-                                        {% endfor %}
-                                </tbody>
+                                <tbody id="booking-table-body"></tbody>
                             </table>
                         </div>
                     </div>

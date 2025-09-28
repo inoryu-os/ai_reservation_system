@@ -52,35 +52,39 @@ from typing import List
 from sqlalchemy import select
 
 def init_db() -> List[Room]:
-    """ROOMS_CONFIG と DB を同期（追加・削除）"""
+    """ROOMS_CONFIG と DB を同期（追加・削除）。挿入順は ROOMS_CONFIG の順を保証する。"""
     Base.metadata.create_all(bind=engine)
 
     with get_session() as session:
-        cfg = {room["name"]: room["capacity"] for room in ROOMS_CONFIG}
-        names_cfg = set(cfg.keys())
+        # 既存の部屋名セット
         names_db = set(session.execute(select(Room.name)).scalars())
 
-        # 追加：configにあるがDBにない部屋
-        to_add_name_set = names_cfg - names_db
-        if to_add_name_set:
-            to_add_rooms = [Room(name=to_add_name, capacity=cfg[to_add_name]) for to_add_name in to_add_name_set]
+        # 追加：config の並び順で追加（セットの反復順非決定性を回避）
+        to_add_rooms: List[Room] = [
+            Room(name=room["name"], capacity=room["capacity"]) 
+            for room in ROOMS_CONFIG 
+            if room["name"] not in names_db
+        ]
+        if to_add_rooms:
             session.add_all(to_add_rooms)
 
         # 削除：DBにあるがconfigにない部屋（Reservationはcascadeで一緒に削除）
+        names_cfg = {room["name"] for room in ROOMS_CONFIG}
         to_delete_name_set = names_db - names_cfg
         if to_delete_name_set:
             to_delete_rooms = session.scalars(select(Room).where(Room.name.in_(to_delete_name_set))).all()
             for to_delete in to_delete_rooms:
                 session.delete(to_delete)
-            
+
         session.commit()
-        return session.scalars(select(Room)).all()
+        # 一貫した順序で返却（id 昇順）
+        return session.scalars(select(Room).order_by(Room.id)).all()
 
 
 def get_rooms() -> List[Room]:
-    """全ての会議室を取得"""
+    """全ての会議室を取得（id 昇順）"""
     with get_session() as session:
-        return session.scalars(select(Room)).all()
+        return session.scalars(select(Room).order_by(Room.id)).all()
 
 
 if __name__ == "__main__":
