@@ -1,7 +1,7 @@
 import { createReservation, getReservationsByDate, cancelReservation as apiCancelReservation} from "./api.js";
 import { displayReservationInTable, displayReservationsInTable, clearBookingTable } from "./bookingTable.js";
 import { getElements, getFormData, showConfirm, resetForm, generateTimeOptions, populateSelect } from "./ui.js";
-import { getTodayJST } from "./timezone.js";
+import { getTodayJST, getJSTNow } from "./timezone.js";
 import "./chat.js";
 
 /**
@@ -74,8 +74,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // カレンダータイトルをJSTの現在月で初期化
   const calendarTitle = document.getElementById('calendar-title');
   if (calendarTitle) {
-    const jstNow = new Date();
-    const jstDate = new Date(jstNow.getTime() + (9 * 60 * 60 * 1000)); // JST (+9時間)
+    const jstDate = getJSTNow();
     const year = jstDate.getFullYear();
     const month = jstDate.getMonth() + 1;
     calendarTitle.textContent = `${year}年${month}月`;
@@ -84,8 +83,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 予約表のタイトルをJSTの今日で初期化
   const bookingTableDate = document.getElementById('booking-table-date');
   if (bookingTableDate) {
-    const jstNow = new Date();
-    const jstDate = new Date(jstNow.getTime() + (9 * 60 * 60 * 1000)); // JST (+9時間)
+    const jstDate = getJSTNow();
     const year = jstDate.getFullYear();
     const month = jstDate.getMonth() + 1;
     const day = jstDate.getDate();
