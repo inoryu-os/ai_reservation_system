@@ -9,11 +9,9 @@ class ChatManager {
         this.chatInput = document.getElementById('chat-input');
         this.chatSendBtn = document.getElementById('chat-send-btn');
         this.clearChatBtn = document.getElementById('clear-chat');
-        this.charCounter = document.getElementById('char-counter');
 
         this.initEventListeners();
 
-        // 初期状態の文字カウンターを設定
         this.updateSendButton();
     }
 
@@ -52,24 +50,6 @@ class ChatManager {
         const text = this.chatInput.value;
         const hasText = text.trim().length > 0;
         this.chatSendBtn.disabled = !hasText;
-
-        // 文字数カウンターを更新
-        if (this.charCounter) {
-            const length = text.length;
-            this.charCounter.textContent = `${length}/500`;
-
-            // 文字数が多くなったら警告色に変更
-            if (length > 400) {
-                this.charCounter.classList.add('text-warning');
-                this.charCounter.classList.remove('text-muted');
-            } else if (length > 480) {
-                this.charCounter.classList.add('text-danger');
-                this.charCounter.classList.remove('text-warning', 'text-muted');
-            } else {
-                this.charCounter.classList.add('text-muted');
-                this.charCounter.classList.remove('text-warning', 'text-danger');
-            }
-        }
     }
 
     async handleSubmit(event) {
