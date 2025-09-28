@@ -64,6 +64,11 @@ def init_db() -> List[Room]:
         _seed_rooms(session)
         return session.query(Room).all()
 
+def get_rooms() -> List[Room]:
+    """全ての会議室を取得"""
+    with get_session() as session:
+        return session.query(Room).all()
+
 
 if __name__ == "__main__":
     init_db()

@@ -1,6 +1,7 @@
 import { createReservation, getReservationsByDate, cancelReservation as apiCancelReservation} from "./api.js";
 import { displayReservationInTable, displayReservationsInTable, clearBookingTable } from "./bookingTable.js";
 import { getElements, getFormData, showConfirm, resetForm, generateTimeOptions, populateSelect } from "./ui.js";
+import "./chat.js";
 
 /**
  * 今日の予約を読み込み表示
@@ -72,4 +73,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   );
 
   document.addEventListener('click', handleCancelClick);
+
+  // チャット機能から使用するためにグローバルに公開
+  window.loadTodaysReservations = loadTodaysReservations;
+  window.displayReservationInTable = displayReservationInTable;
 });

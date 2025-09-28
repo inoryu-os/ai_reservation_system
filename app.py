@@ -1,10 +1,10 @@
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
-from datetime import date
 
 load_dotenv()
 import models
 from reservation_service import ReservationService
+from ai_service import AIService
 
 app = Flask(__name__)
 
@@ -67,6 +67,33 @@ def cancel_reservation(reservation_id):
         elif "サーバーエラー" in result["error"]:
             status_code = 500
         return jsonify(result), status_code
+
+
+@app.route('/api/chat', methods=['POST'])
+def chat_with_ai():
+    """AIチャットAPI"""
+    try:
+        data = request.get_json()
+        message = data.get('message', '').strip()
+
+        if not message:
+            return jsonify({
+                'success': False,
+                'error': 'メッセージが入力されていません'
+            }), 400
+
+        ai_service = AIService()
+        result = ai_service.process_chat_message(message, user_name)
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'チャット処理エラー: {str(e)}',
+            'response': '申し訳ありませんが、システムエラーが発生しました。'
+        }), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
