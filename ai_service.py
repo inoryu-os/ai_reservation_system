@@ -2,18 +2,39 @@ import os
 import json
 import requests
 from datetime import datetime, timedelta
-from openai import OpenAI
+from openai import OpenAI, AzureOpenAI
 from reservation_service import ReservationService
 import models
 from timezone_utils import JST, get_jst_now, format_jst_date
 
 class AIService:
     def __init__(self):
-        api_key = os.getenv('OPENAI_API_KEY')
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY is not set in environment variables")
+        # OpenAI or Azure OpenAI を環境変数で自動切り替え
+        azure_key = os.getenv("AZURE_OPENAI_KEY")
+        azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+        azure_api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
+        azure_deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
 
-        self.client = OpenAI(api_key=api_key)
+        if azure_key and azure_endpoint:
+            # Azure OpenAI クライアント
+            self.client = AzureOpenAI(
+                api_key=azure_key,
+                azure_endpoint=azure_endpoint,
+                api_version=azure_api_version,
+            )
+            # Azure では model にはデプロイメント名を指定
+            if not azure_deployment:
+                raise ValueError("AZURE_OPENAI_DEPLOYMENT_NAME is required when using Azure OpenAI")
+            self.model = azure_deployment
+        else:
+            # OpenAI クライアント
+            api_key = os.getenv('OPENAI_API_KEY')
+            if not api_key:
+                raise ValueError("OPENAI_API_KEY is not set in environment variables")
+            self.client = OpenAI(api_key=api_key)
+            # 既存挙動を維持（必要ならモデルは環境変数で上書き可）
+            self.model = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+
         self.base_url = "http://127.0.0.1:5000"
 
     def process_chat_message(self, message, user_name="guest"):
@@ -29,60 +50,69 @@ class AIService:
             now = get_jst_now()
             today = format_jst_date(now)
 
-            # Function Callingの定義
-            functions = [
+            # Tools（関数ツール）の定義（最新の推奨インターフェース）
+            tools = [
                 {
-                    "name": "create_reservation",
-                    "description": "会議室の予約を作成する",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "room_id": {
-                                "type": "integer",
-                                "description": "会議室ID"
+                    "type": "function",
+                    "function": {
+                        "name": "create_reservation",
+                        "description": "会議室の予約を作成する",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "room_id": {
+                                    "type": "integer",
+                                    "description": "会議室ID"
+                                },
+                                "date": {
+                                    "type": "string",
+                                    "description": "予約日 (YYYY-MM-DD形式)"
+                                },
+                                "start_time": {
+                                    "type": "string",
+                                    "description": "開始時刻 (HH:MM形式)"
+                                },
+                                "end_time": {
+                                    "type": "string",
+                                    "description": "終了時刻 (HH:MM形式)"
+                                }
                             },
-                            "date": {
-                                "type": "string",
-                                "description": "予約日 (YYYY-MM-DD形式)"
-                            },
-                            "start_time": {
-                                "type": "string",
-                                "description": "開始時刻 (HH:MM形式)"
-                            },
-                            "end_time": {
-                                "type": "string",
-                                "description": "終了時刻 (HH:MM形式)"
-                            }
-                        },
-                        "required": ["room_id", "date", "start_time", "end_time"]
+                            "required": ["room_id", "date", "start_time", "end_time"]
+                        }
                     }
                 },
                 {
-                    "name": "get_reservations",
-                    "description": "指定日の予約一覧を取得する",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "date": {
-                                "type": "string",
-                                "description": "予約を確認する日付 (YYYY-MM-DD形式)"
-                            }
-                        },
-                        "required": ["date"]
+                    "type": "function",
+                    "function": {
+                        "name": "get_reservations",
+                        "description": "指定日の予約一覧を取得する",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "date": {
+                                    "type": "string",
+                                    "description": "予約を確認する日付 (YYYY-MM-DD形式)"
+                                }
+                            },
+                            "required": ["date"]
+                        }
                     }
                 },
                 {
-                    "name": "cancel_reservation",
-                    "description": "予約をキャンセルする",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "reservation_id": {
-                                "type": "integer",
-                                "description": "キャンセルする予約のID"
-                            }
-                        },
-                        "required": ["reservation_id"]
+                    "type": "function",
+                    "function": {
+                        "name": "cancel_reservation",
+                        "description": "予約をキャンセルする",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "reservation_id": {
+                                    "type": "integer",
+                                    "description": "キャンセルする予約のID"
+                                }
+                            },
+                            "required": ["reservation_id"]
+                        }
                     }
                 }
             ]
@@ -106,34 +136,43 @@ class AIService:
 ユーザーが予約、キャンセル、確認を求めた場合は、適切な関数を呼び出してください。
 """
 
-            # OpenAI APIに送信
+            # OpenAI/Azure OpenAI APIに送信（tools を使用）
             response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": message}
                 ],
-                functions=functions,
-                function_call="auto",
+                tools=tools,
+                tool_choice="auto",
                 temperature=0.1
             )
 
-            # Function Callingの処理
-            if response.choices[0].message.function_call:
-                function_name = response.choices[0].message.function_call.name
-                function_args = json.loads(response.choices[0].message.function_call.arguments)
+            # Tools 呼び出しの処理
+            msg = response.choices[0].message
+            tool_calls = getattr(msg, "tool_calls", None)
+            if tool_calls:
+                # 今回は最初の tool_call を処理
+                call = tool_calls[0]
+                if call.get("type") == "function":
+                    fn = call["function"]["name"]
+                    args_json = call["function"].get("arguments") or "{}"
+                    try:
+                        fn_args = json.loads(args_json)
+                    except Exception:
+                        fn_args = {}
 
-                if function_name == "create_reservation":
-                    return self._call_create_reservation_api(function_args)
-                elif function_name == "get_reservations":
-                    return self._call_get_reservations_api(function_args)
-                elif function_name == "cancel_reservation":
-                    return self._call_cancel_reservation_api(function_args)
+                    if fn == "create_reservation":
+                        return self._call_create_reservation_api(fn_args)
+                    elif fn == "get_reservations":
+                        return self._call_get_reservations_api(fn_args)
+                    elif fn == "cancel_reservation":
+                        return self._call_cancel_reservation_api(fn_args)
 
             # 通常の応答
             return {
                 "success": True,
-                "response": response.choices[0].message.content,
+                "response": msg.content,
                 "action": "info"
             }
 
