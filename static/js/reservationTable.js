@@ -134,7 +134,7 @@ export class ReservationTable {
     const slots = [];
     for (let hour = startHour; hour <= endHour; hour++) {
       for (let min = 0; min < 60; min += stepMinutes) {
-        if (hour === endHour && min === 30) break; // 22:30で終了
+        if (hour === endHour) break; 
         slots.push({ hour, min });
       }
     }

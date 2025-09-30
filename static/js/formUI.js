@@ -83,7 +83,7 @@ function generateTimeOptions() {
   const options = [];
   for (let hour = startHour; hour <= endHour; hour++) {
     for (let minute = 0; minute < 60; minute += stepMinutes) {
-      if (hour === endHour && minute > 0) break;
+      if (hour === endHour) break;
       const h = String(hour).padStart(2, "0");
       const m = String(minute).padStart(2, "0");
       const timeStr = `${h}:${m}`;

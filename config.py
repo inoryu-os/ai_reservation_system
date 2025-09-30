@@ -5,6 +5,6 @@ ROOMS_CONFIG = [
     {"name": "会議室D", "capacity": 20},
 ]
 
-#予約できる時間の範囲
-EARLIEST_HOUR = 7
-LATEST_HOUR = 22
+#予約できる時間の範囲(7時から22時まで)
+EARLIEST = 7
+LATEST = 22
