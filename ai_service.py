@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from openai import OpenAI, AzureOpenAI
 from reservation_service import ReservationService
 import models
-from timezone_utils import JST, get_jst_now, format_jst_date
+from timezone_utils import get_jst_now, format_jst_date
 
 class AIService:
     def __init__(self):

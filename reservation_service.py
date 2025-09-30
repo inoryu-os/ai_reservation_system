@@ -5,6 +5,7 @@
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 import models
 from timezone_utils import JST, parse_datetime_jst, format_jst_date, format_jst_time, get_jst_now, convert_to_jst
 
@@ -123,6 +124,49 @@ class ReservationService:
 
         except ValueError:
             return {"success": False, "error": "日付の形式が正しくありません"}
+        except Exception as e:
+            return {"success": False, "error": f"サーバーエラーが発生しました: {str(e)}"}
+        
+    @staticmethod
+    def get_reservations_by_name(user_name: str) -> Dict[str, Any]:
+        """
+        指定されたユーザー名の予約一覧を取得する
+
+        Args:
+            user_name: ユーザー名
+
+        Returns:
+            取得結果とデータ
+        """
+        try:
+            with models.get_session() as session:
+                reservations = session.scalars(
+                    select(models.Reservation)
+                    .where(models.Reservation.user_name == user_name)
+                    .options(selectinload(models.Reservation.room))
+                    .order_by(models.Reservation.start_time)
+                ).all()
+
+                result = []
+                for reservation in reservations:
+                    # データベースから取得した時刻をJSTに変換して表示
+                    start_time_jst = convert_to_jst(reservation.start_time)
+                    end_time_jst = convert_to_jst(reservation.end_time)
+
+                    result.append({
+                        "id": reservation.id,
+                        "room_id": reservation.room_id,
+                        "room_name": reservation.room.name,
+                        "user_name": reservation.user_name,
+                        "start_time": format_jst_time(start_time_jst),
+                        "end_time": format_jst_time(end_time_jst),
+                        "date": format_jst_date(start_time_jst)
+                    })
+
+                return {"success": True, "reservations": result}
+
+        except ValueError as e:
+            return {"success": False, "error": f"値エラー:{e}"}
         except Exception as e:
             return {"success": False, "error": f"サーバーエラーが発生しました: {str(e)}"}
 
