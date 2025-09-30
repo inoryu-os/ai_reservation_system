@@ -6,5 +6,5 @@ ROOMS_CONFIG = [
 ]
 
 #予約できる時間の範囲(7時から22時まで)
-EARLIEST = 7
-LATEST = 22
+STARTHOUR = 7
+ENDHOUR = 22

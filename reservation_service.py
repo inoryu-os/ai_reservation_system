@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 import models
 from timezone_utils import JST, parse_datetime_jst, format_jst_date, format_jst_time, get_jst_now, convert_to_jst
-from config import EARLIEST, LATEST
+from config import STARTHOUR, ENDHOUR
 
 
 class ReservationService:
@@ -209,8 +209,8 @@ class ReservationService:
         start_time = datetime.strptime(start_time, "%H:%M").time()
         end_time = datetime.strptime(end_time, "%H:%M").time() 
 
-        earliest = time(EARLIEST,0)
-        latest = time(LATEST, 0)
+        earliest = time(STARTHOUR,0)
+        latest = time(ENDHOUR, 0)
 
         if start_time < earliest or end_time > latest:
             return {"valid": False, "error": "7時から22時の間で予約してください"}

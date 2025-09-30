@@ -1,13 +1,13 @@
 import os
-from datetime import datetime
+from datetime import datetime, time
 from typing import List
 
 from sqlalchemy import (
     create_engine, Integer, String, DateTime, ForeignKey, select
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker, Session
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker, Session, validates
 
-from config import ROOMS_CONFIG
+from config import ROOMS_CONFIG, STARTHOUR, ENDHOUR
 
 DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///meeting_rooms.db')
 
@@ -35,6 +35,14 @@ class Reservation(Base):
     end_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
     room: Mapped["Room"] = relationship("Room", back_populates="reservations")
+
+    @validates("start_time", "end_time")
+    def validate_time(self, key, value):
+        earliest = time(STARTHOUR, 0)  
+        latest = time(ENDHOUR, 0)    
+        if not (earliest <= value.time() <= latest):
+            raise ValueError(f"{key} must be between 07:00 and 22:00")
+        return value
 
 engine = create_engine(DATABASE_URL, echo=False)
 
