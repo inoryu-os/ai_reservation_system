@@ -4,7 +4,7 @@
 
 from datetime import datetime, timedelta, time
 from typing import List, Optional, Dict, Any
-from sqlalchemy import select
+from sqlalchemy import select, and_, exists
 from sqlalchemy.orm import selectinload
 import models
 from timezone_utils import JST, parse_datetime_jst, format_jst_date, format_jst_time, get_jst_now, convert_to_jst
@@ -166,6 +166,54 @@ class ReservationService:
             return {"success": False, "error": f"値エラー:{e}"}
         except Exception as e:
             return {"success": False, "error": f"サーバーエラーが発生しました: {str(e)}"}
+        
+    @staticmethod
+    def find_available_rooms_by_start_datetime_and_duration(date: str, start_time: str, duration_minutes: int) -> List[Dict[str, Any]]:
+        """
+        指定した開始日時と利用時間で空いている部屋の情報を返す。
+
+        Args:
+            date: 日付
+            start_time: 開始時刻
+            duration_minutes: 利用時間(分)
+        Returns:
+            利用可能な部屋の名前とidを持つリスト
+        """
+        # 入力検証
+        if duration_minutes <= 0:
+            raise ValueError("利用時間は0分より大きくなければなりません")
+
+        try:
+            start_datetime = parse_datetime_jst(date, start_time)
+        except Exception:
+            raise ValueError("開始日時の形式が正しくありません")
+
+        end_datetime = start_datetime + timedelta(minutes=duration_minutes)
+
+        # 営業時間チェック（開始は営業開始以降、終了は営業終了以前／同時は不可）
+        if start_datetime.time() < time(STARTHOUR,0) or end_datetime.time() > time(ENDHOUR,0):
+            raise ValueError("開始時刻もしくは終了時刻が業務時間外です")
+        if not (end_datetime > start_datetime):
+            raise ValueError("終了時刻は開始時刻より後に設定してください")
+
+        # 重複のない部屋を検索
+        with models.get_session() as session:
+            overlap = and_(
+                models.Reservation.room_id == models.Room.id,
+                models.Reservation.start_time < end_datetime,
+                models.Reservation.end_time > start_datetime,
+            )
+
+            subq = select(models.Reservation.id).where(overlap)
+            stmt = (
+                select(models.Room)
+                .where(~exists(subq).correlate(models.Room))
+                .order_by(models.Room.id)
+            )
+
+            rooms = session.scalars(stmt).all()
+
+            return [{"id": room.id, "name": room.name} for room in rooms]
 
 
     @staticmethod
