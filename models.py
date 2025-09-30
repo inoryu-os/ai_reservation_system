@@ -7,7 +7,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker, Session
 
-from config.rooms import ROOMS_CONFIG
+from config import ROOMS_CONFIG
 
 DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///meeting_rooms.db')
 

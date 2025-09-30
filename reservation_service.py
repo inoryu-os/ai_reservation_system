@@ -2,12 +2,13 @@
 予約関連のビジネスロジックを担当するサービスクラス
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from typing import List, Optional, Dict, Any
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 import models
 from timezone_utils import JST, parse_datetime_jst, format_jst_date, format_jst_time, get_jst_now, convert_to_jst
+from config import EARLIEST, LATEST
 
 
 class ReservationService:
@@ -40,10 +41,6 @@ class ReservationService:
             # 日時変換（JSTで処理）
             start_datetime = parse_datetime_jst(date, start_time)
             end_datetime = parse_datetime_jst(date, end_time)
-
-            # 時間の妥当性チェック
-            if start_datetime >= end_datetime:
-                return {"success": False, "error": "終了時刻は開始時刻より後に設定してください"}
 
             # 重複チェックと予約作成
             with models.get_session() as session:
@@ -128,7 +125,7 @@ class ReservationService:
             return {"success": False, "error": f"サーバーエラーが発生しました: {str(e)}"}
         
     @staticmethod
-    def get_reservations_by_name(user_name: str) -> Dict[str, Any]:
+    def get_reservations_by_username(user_name: str) -> Dict[str, Any]:
         """
         指定されたユーザー名の予約一覧を取得する
 
@@ -170,6 +167,7 @@ class ReservationService:
         except Exception as e:
             return {"success": False, "error": f"サーバーエラーが発生しました: {str(e)}"}
 
+
     @staticmethod
     def cancel_reservation(reservation_id: int) -> Dict[str, Any]:
         """
@@ -204,11 +202,27 @@ class ReservationService:
 
     @staticmethod
     def _validate_reservation_data(room_id: int, date: str, start_time: str, end_time: str) -> Dict[str, Any]:
-        """予約データの基本検証"""
+        """予約データの基本検証(引数が揃っているか、開始時刻および終了時刻が勤務可能時間内か、開始時刻が終了時刻よりも後か)"""
         if not all([room_id, date, start_time, end_time]):
             return {"valid": False, "error": "必須項目が不足しています"}
+        
+        start_time = datetime.strptime(start_time, "%H:%M").time()
+        end_time = datetime.strptime(end_time, "%H:%M").time() 
+
+        earliest = time(EARLIEST,0)
+        latest = time(LATEST, 0)
+
+        if start_time < earliest or end_time > latest:
+            return {"valid": False, "error": "7時から22時の間で予約してください"}
+        
+        if start_time >= end_time:
+            return {"valid": False, "error": "終了時刻は開始時刻より後に設定してください"}
+         
 
         return {"valid": True}
+
+
+
 
     @staticmethod
     def _check_conflict(session, room_id: int, new_start_time: datetime, new_end_time: datetime) -> bool:

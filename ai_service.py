@@ -184,16 +184,15 @@ class AIService:
             }
 
     def _call_create_reservation_api(self, args):
-        """REST APIを呼び出して予約を作成"""
+        """REST APIを呼び出して予約を作成し、LLMに結果を返す"""
+        url = f"{self.base_url}/api/reservations"
+        data = {
+            "room-id": str(args["room_id"]),
+            "date": args["date"],
+            "start-time": args["start_time"],
+            "end-time": args["end_time"]
+        }
         try:
-            url = f"{self.base_url}/api/reservations"
-            data = {
-                "room-id": str(args["room_id"]),
-                "date": args["date"],
-                "start-time": args["start_time"],
-                "end-time": args["end_time"]
-            }
-
             response = requests.post(url, json=data, headers={"Content-Type": "application/json"})
             result = response.json()
 
