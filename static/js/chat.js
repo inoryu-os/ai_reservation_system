@@ -10,10 +10,38 @@ class ChatManager {
         this.chatSendBtn = document.getElementById('chat-send-btn');
         this.clearChatBtn = document.getElementById('clear-chat');
 
-        this.initEventListeners();
+        // === セッションID管理 ===
+        this.SESSION_STORAGE_KEY = 'chat_session_id';
+        this.sessionId = this.ensureSessionId(); // 初期発行 or 既存を再利用
 
+        this.initEventListeners();
         this.updateSendButton();
     }
+
+    /* ---------------------------
+       セッションID関連
+    --------------------------- */
+    ensureSessionId() {
+        let sid = localStorage.getItem(this.SESSION_STORAGE_KEY);
+        if (!sid) {
+            sid = this.generateSessionId();
+            localStorage.setItem(this.SESSION_STORAGE_KEY, sid);
+        }
+        return sid;
+    }
+
+    // ★ セッションIDを新規発行して置き換える（clear時に使用）
+    rotateSessionId() {
+        const sid = this.generateSessionId();
+        localStorage.setItem(this.SESSION_STORAGE_KEY, sid);
+        this.sessionId = sid;
+        return sid;
+    }
+
+    generateSessionId() {
+        return crypto.randomUUID(); 
+    }
+
 
     initEventListeners() {
         // フォーム送信
@@ -76,12 +104,22 @@ class ChatManager {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ message: message })
+                body: JSON.stringify({ 
+                    message: message,
+                    session_id: this.sessionId
+                })
             });
 
             const result = await response.json();
 
             if (result.success) {
+
+                // （任意）サーバが新しい session_id を返す設計なら同期
+                if (result.session_id && result.session_id !== this.sessionId) {
+                    localStorage.setItem(this.SESSION_STORAGE_KEY, result.session_id);
+                    this.sessionId = result.session_id;
+                }
+
                 // AIの応答を表示
                 this.addMessage(result.response, 'ai');
 
@@ -136,6 +174,9 @@ class ChatManager {
                 message.remove();
             }
         });
+
+        //セッションIDも再発行
+        this.rotateSessionId();
     }
 
     updateReservationTable(reservation) {
@@ -158,98 +199,8 @@ document.addEventListener('DOMContentLoaded', () => {
     new ChatManager();
 });
 
-// CSS スタイルを動的に追加
-const chatStyles = `
-<style>
-.chat-card {
-    display: flex;
-    flex-direction: column;
-}
-
-.chat-container {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-}
-
-.chat-messages {
-    flex: 1;
-    overflow-y: auto;
-    max-height: 500px;
-    padding: 10px;
-}
-
-.message {
-    margin-bottom: 15px;
-}
-
-.message-content {
-    padding: 8px 12px;
-    border-radius: 8px;
-    max-width: 90%;
-    word-wrap: break-word;
-}
-
-.user-message .message-content {
-    background-color: #007bff;
-    color: white;
-    margin-left: auto;
-    margin-right: 0;
-    text-align: right;
-}
-
-.ai-message .message-content {
-    background-color: #f8f9fa;
-    color: #333;
-    border: 1px solid #dee2e6;
-}
-
-.chat-input-container {
-    flex-shrink: 0;
-}
-
-#chat-input {
-    border-radius: 20px;
-    padding: 8px 12px;
-}
-
-#chat-input:focus {
-    border-color: #007bff;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-}
-
-#chat-send-btn {
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-#chat-send-btn:disabled {
-    opacity: 0.6;
-}
-
-.chat-messages::-webkit-scrollbar {
-    width: 6px;
-}
-
-.chat-messages::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 3px;
-}
-
-.chat-messages::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
-    border-radius: 3px;
-}
-
-.chat-messages::-webkit-scrollbar-thumb:hover {
-    background: #a8a8a8;
-}
-</style>
-`;
-
-// スタイルをheadに追加
-document.head.insertAdjacentHTML('beforeend', chatStyles);
+// CSSファイルを動的に読み込み
+const chatStyleLink = document.createElement('link');
+chatStyleLink.rel = 'stylesheet';
+chatStyleLink.href = '/static/css/chat.css';
+document.head.appendChild(chatStyleLink);
