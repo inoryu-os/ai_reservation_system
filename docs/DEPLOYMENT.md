@@ -6,24 +6,61 @@
 
 #### 最小要件
 - Python 3.8+
-- メモリ: 512MB以上
+- Redis 5.0+
+- Docker（Redis用、推奨）
+- メモリ: 1GB以上
 - ストレージ: 1GB以上
 - OS: Linux/Windows/macOS
 
 #### 推奨環境
 - Python 3.11+
+- Redis 7.0+
+- Docker 20.10+
 - メモリ: 2GB以上
 - ストレージ: 10GB以上
 - OS: Ubuntu 22.04 LTS
 
 ### 本番環境設定
 
-#### 1. システム準備
+#### 1. Redis セットアップ（Docker推奨）
+
+```bash
+# Dockerを使ったRedis起動（開発環境）
+docker run -d \
+  --name meeting-room-redis \
+  -p 6379:6379 \
+  redis:7-alpine
+
+# Redisの動作確認
+docker exec -it meeting-room-redis redis-cli ping
+# => PONG
+
+# 本番環境用（永続化とパスワード設定）
+docker run -d \
+  --name meeting-room-redis \
+  --restart always \
+  -p 6379:6379 \
+  -v /var/lib/redis:/data \
+  redis:7-alpine redis-server \
+  --requirepass your_redis_password \
+  --appendonly yes
+
+# または、システムのRedisをインストール
+sudo apt install redis-server
+sudo systemctl enable redis-server
+sudo systemctl start redis-server
+```
+
+#### 2. システム準備
 
 ```bash
 # Ubuntu の場合
 sudo apt update
-sudo apt install python3 python3-pip python3-venv nginx
+sudo apt install python3 python3-pip python3-venv nginx docker.io
+
+# Docker有効化
+sudo systemctl enable docker
+sudo systemctl start docker
 
 # Python仮想環境作成
 python3 -m venv venv
@@ -31,7 +68,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-#### 2. 環境変数設定
+#### 3. 環境変数設定
 
 ```bash
 # 本番用 .env
@@ -40,9 +77,16 @@ OPENAI_API_KEY=your_production_api_key
 FLASK_ENV=production
 SECRET_KEY=your_secret_key_here
 TZ=Asia/Tokyo  # JST タイムゾーン設定
+
+# Redis設定
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_DB=0
+REDIS_PASSWORD=your_redis_password  # パスワード設定した場合
+CHAT_HISTORY_TTL=86400  # 24時間
 ```
 
-#### 3. WSGI サーバー設定 (Gunicorn)
+#### 4. WSGI サーバー設定 (Gunicorn)
 
 ```bash
 # requirements.txt に追加
@@ -64,7 +108,7 @@ preload_app = True
 EOF
 ```
 
-#### 4. Systemd サービス設定
+#### 5. Systemd サービス設定
 
 ```bash
 # /etc/systemd/system/meeting-room.service
@@ -92,7 +136,7 @@ sudo systemctl enable meeting-room
 sudo systemctl start meeting-room
 ```
 
-#### 5. Nginx リバースプロキシ設定
+#### 6. Nginx リバースプロキシ設定
 
 ```nginx
 # /etc/nginx/sites-available/meeting-room
@@ -271,6 +315,10 @@ sudo apt update && sudo apt upgrade -y
 
 # SSL証明書確認
 sudo certbot certificates
+
+# Redis動作確認
+docker exec -it meeting-room-redis redis-cli ping
+docker exec -it meeting-room-redis redis-cli INFO memory
 ```
 
 #### 月次タスク
@@ -278,12 +326,19 @@ sudo certbot certificates
 # データベース最適化
 sudo -u postgres psql meeting_rooms -c "VACUUM ANALYZE;"
 
+# Redis メモリ使用状況確認
+docker exec -it meeting-room-redis redis-cli INFO memory | grep used_memory_human
+
+# Redisキー数確認
+docker exec -it meeting-room-redis redis-cli DBSIZE
+
 # バックアップ確認
 ls -la /var/backups/meeting-room/
 
 # ディスク使用量確認
 df -h
 du -sh /var/www/meeting-room
+docker system df
 ```
 
 ### アプリケーション更新
@@ -344,7 +399,28 @@ sudo -u postgres psql meeting_rooms -c "SELECT 1;"
 cat /etc/postgresql/*/main/pg_hba.conf
 ```
 
-#### 3. OpenAI API エラー
+#### 3. Redis 接続エラー
+
+```bash
+# Redis状態確認
+docker ps | grep meeting-room-redis
+docker logs meeting-room-redis
+
+# Redis接続テスト
+docker exec -it meeting-room-redis redis-cli ping
+
+# パスワード設定がある場合
+docker exec -it meeting-room-redis redis-cli -a your_password ping
+
+# Pythonから接続テスト
+python3 << EOF
+import redis
+r = redis.Redis(host='localhost', port=6379, db=0)
+print(r.ping())
+EOF
+```
+
+#### 4. OpenAI API エラー
 
 ```bash
 # API キー確認
@@ -358,7 +434,26 @@ curl -H "Authorization: Bearer $OPENAI_API_KEY" \
 tail -f /var/www/meeting-room/logs/app.log
 ```
 
-#### 4. 高負荷時の対応
+#### 5. チャット履歴関連の問題
+
+```bash
+# セッション毎のチャット履歴件数確認
+docker exec -it meeting-room-redis redis-cli LLEN "chat_history:SESSION_ID"
+
+# 特定セッションの履歴確認
+docker exec -it meeting-room-redis redis-cli LRANGE "chat_history:SESSION_ID" 0 -1
+
+# 履歴のTTL確認
+docker exec -it meeting-room-redis redis-cli TTL "chat_history:SESSION_ID"
+
+# 全てのチャット履歴キー確認
+docker exec -it meeting-room-redis redis-cli KEYS "chat_history:*"
+
+# 古いセッションのクリーンアップ（手動）
+docker exec -it meeting-room-redis redis-cli DEL "chat_history:OLD_SESSION_ID"
+```
+
+#### 6. 高負荷時の対応
 
 ```bash
 # CPU・メモリ確認
@@ -413,7 +508,26 @@ fi
 
 ### 復旧手順
 
-#### 1. データベース復旧
+#### 1. Redis復旧
+
+```bash
+# Redisコンテナ再起動
+docker stop meeting-room-redis
+docker start meeting-room-redis
+
+# 新しいRedisコンテナ作成（データ損失時）
+docker run -d \
+  --name meeting-room-redis \
+  --restart always \
+  -p 6379:6379 \
+  -v /var/lib/redis:/data \
+  redis:7-alpine redis-server --appendonly yes
+
+# 注意: チャット履歴はTTLで自動削除されるため、
+# 通常はRedisのバックアップは不要
+```
+
+#### 2. データベース復旧
 
 ```bash
 # バックアップからの復元
@@ -422,7 +536,7 @@ sudo -u postgres createdb meeting_rooms
 sudo -u postgres psql meeting_rooms < /var/backups/meeting-room/db_backup_YYYYMMDD.sql
 ```
 
-#### 2. アプリケーション復旧
+#### 3. アプリケーション復旧
 
 ```bash
 # バックアップからの復元
@@ -432,16 +546,19 @@ cp -r /var/backups/meeting-room/app_backup_YYYYMMDD /var/www/meeting-room
 sudo systemctl start meeting-room
 ```
 
-#### 3. 動作確認
+#### 4. 動作確認
 
 ```bash
+# Redis接続確認
+docker exec -it meeting-room-redis redis-cli ping
+
 # ヘルスチェック
 curl http://localhost:8000/health
 
-# AIチャット機能テスト
+# AIチャット機能テスト（セッションID付き）
 curl -X POST http://localhost:8000/api/chat \
      -H "Content-Type: application/json" \
-     -d '{"message": "今日の予約状況を教えてください"}'
+     -d '{"message": "今日の予約状況を教えてください", "sessionId": "test-session-001"}'
 
 # 予約APIテスト
 curl -X POST http://localhost:8000/api/reservations \

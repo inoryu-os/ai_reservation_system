@@ -6,6 +6,7 @@ from openai import OpenAI, AzureOpenAI
 from reservation_service import ReservationService
 import models
 from timezone_utils import get_jst_now, format_jst_date
+from redis_service import RedisService
 
 class AIService:
     def __init__(self):
@@ -36,8 +37,9 @@ class AIService:
             self.model = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
 
         self.base_url = "http://127.0.0.1:5000"
+        self.redis_service = RedisService()
 
-    def process_chat_message(self, message, user_name="guest"):
+    def process_chat_message(self, message, user_name="guest", session_id=None):
         """
         ユーザーのチャットメッセージを処理し、Function Callingで既存APIを呼び出し
         """
@@ -136,13 +138,21 @@ class AIService:
 ユーザーが予約、キャンセル、確認を求めた場合は、適切な関数を呼び出してください。
 """
 
+            # チャット履歴を取得（セッションIDがある場合）
+            messages = [{"role": "system", "content": system_prompt}]
+
+            if session_id:
+                # 過去のチャット履歴を取得
+                history = self.redis_service.get_history(session_id)
+                messages.extend(history)
+
+            # 現在のユーザーメッセージを追加
+            messages.append({"role": "user", "content": message})
+
             # OpenAI/Azure OpenAI APIに送信（tools を使用）
             response = self.client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": message}
-                ],
+                messages=messages,
                 tools=tools,
                 tool_choice="auto",
                 temperature=0.1
@@ -151,28 +161,47 @@ class AIService:
             # Tools 呼び出しの処理
             msg = response.choices[0].message
             tool_calls = getattr(msg, "tool_calls", None)
+
+            # AIの応答をチャット履歴に保存
+            if session_id:
+                # ユーザーメッセージを保存
+                self.redis_service.add_message(session_id, "user", message)
+
             if tool_calls:
                 # 今回は最初の tool_call を処理
                 call = tool_calls[0]
-                if call.get("type") == "function":
-                    fn = call["function"]["name"]
-                    args_json = call["function"].get("arguments") or "{}"
+                if call.type == "function":
+                    fn = call.function.name
+                    args_json = call.function.arguments or "{}"
                     try:
                         fn_args = json.loads(args_json)
                     except Exception:
                         fn_args = {}
 
+                    result = None
                     if fn == "create_reservation":
-                        return self._call_create_reservation_api(fn_args)
+                        result = self._call_create_reservation_api(fn_args)
                     elif fn == "get_reservations":
-                        return self._call_get_reservations_api(fn_args)
+                        result = self._call_get_reservations_api(fn_args)
                     elif fn == "cancel_reservation":
-                        return self._call_cancel_reservation_api(fn_args)
+                        result = self._call_cancel_reservation_api(fn_args)
+
+                    # AIの応答を履歴に保存
+                    if session_id and result:
+                        self.redis_service.add_message(session_id, "assistant", result.get("response", ""))
+
+                    return result
 
             # 通常の応答
+            ai_response = msg.content
+
+            # AIの応答を履歴に保存
+            if session_id:
+                self.redis_service.add_message(session_id, "assistant", ai_response)
+
             return {
                 "success": True,
-                "response": msg.content,
+                "response": ai_response,
                 "action": "info"
             }
 

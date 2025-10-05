@@ -104,9 +104,9 @@ class ChatManager {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     message: message,
-                    session_id: this.sessionId
+                    sessionId: this.sessionId
                 })
             });
 

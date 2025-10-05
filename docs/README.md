@@ -19,6 +19,7 @@ zerobase_AI/
 ├── app.py                 # Flaskメインアプリケーション
 ├── ai_service.py          # OpenAI API統合サービス
 ├── reservation_service.py # 予約管理ビジネスロジック
+├── redis_service.py       # Redisチャット履歴管理サービス
 ├── models.py              # データベースモデル
 ├── timezone_utils.py      # タイムゾーン処理ユーティリティ
 ├── requirements.txt       # Python依存関係
@@ -36,9 +37,11 @@ zerobase_AI/
 │       ├── timezone.js       # フロントエンド用タイムゾーン処理
 │       ├── reservationTable.js # 予約表管理
 │       └── config.js         # 設定定数
-├── README.md             # プロジェクト概要
-├── TECHNICAL_DOCS.md     # 技術仕様書
-└── DEPLOYMENT.md         # デプロイメント・運用ガイド
+├── docs/
+│   ├── README.md         # プロジェクト概要
+│   ├── TECHNICAL_DOCS.md # 技術仕様書
+│   └── DEPLOYMENT.md     # デプロイメント・運用ガイド
+└── README.md             # メインドキュメント
 ```
 
 ## 必要な依存関係
@@ -48,19 +51,49 @@ Flask==2.3.3
 python-dotenv==1.0.0
 requests==2.31.0
 SQLAlchemy==2.0.32
-openai==1.12.0
+openai>=1.50.0
+redis==5.0.1
 ```
+
+## 外部サービス
+
+- **OpenAI API**: AI対話機能
+- **Redis**: チャット履歴管理（セッション毎）
 
 ## 環境設定
 
-### 1. 環境変数設定 (.env)
+### 1. Redisサーバーの起動（Docker推奨）
 
 ```bash
-DATABASE_URL=sqlite:///meeting_rooms.db
-OPENAI_API_KEY=your_openai_api_key_here
+# Dockerを使ってRedisサーバーを起動
+docker run -d \
+  --name meeting-redis \
+  -p 6379:6379 \
+  redis:7-alpine
+
+# Redisの動作確認
+docker exec -it meeting-redis redis-cli ping
+# => PONG が返ってくればOK
 ```
 
-### 2. インストール
+### 2. 環境変数設定 (.env)
+
+```bash
+# データベース
+DATABASE_URL=sqlite:///meeting_rooms.db
+
+# OpenAI API
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Redis設定
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_DB=0
+REDIS_PASSWORD=
+CHAT_HISTORY_TTL=86400  # チャット履歴保持期間（秒）
+```
+
+### 3. インストール
 
 ```bash
 # 仮想環境作成
@@ -71,7 +104,7 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 3. データベース初期化
+### 4. データベース初期化
 
 ```bash
 python models.py
@@ -80,6 +113,10 @@ python models.py
 ## 起動方法
 
 ```bash
+# 1. Redisサーバーが起動していることを確認
+docker ps | grep meeting-room-redis
+
+# 2. Flaskアプリケーションを起動
 python app.py
 ```
 
@@ -95,9 +132,16 @@ python app.py
 
 ### AIチャット API
 
-- `POST /api/chat` - AI対話処理
+- `POST /api/chat` - AI対話処理（セッションID必須）
 
 ## AIチャット機能
+
+### セッション管理
+
+- **セッションID**: クライアント側で生成（UUID推奨）
+- **チャット履歴**: Redisに保存（セッション毎）
+- **文脈保持**: 同一セッション内で過去の会話を参照
+- **有効期限**: デフォルト24時間（設定可能）
 
 ### Function Calling対応
 
@@ -251,6 +295,18 @@ model=self.deployment_name  # "gpt-3.5-turbo" → デプロイメント名
 このプロジェクトは開発用途での使用を想定しています。
 
 ## 更新履歴
+
+### v1.3.1 (2025-10-05)
+- OpenAI 2.x対応完了（1.12.0 → 2.1.0）
+- Tool Calling API更新（functions → tools）
+- chat.jsのセッションID送信キー修正（session_id → sessionId）
+- Redis接続パラメータ処理改善
+
+### v1.3.0 (2025-10-05)
+- Redisによるチャット履歴管理機能追加
+- セッション毎の文脈保持機能実装
+- redis_service.pyモジュール追加
+- Docker Redisセットアップ手順追加
 
 ### v1.2.0 (2025-09-28)
 - JST統一タイムゾーン対応実装

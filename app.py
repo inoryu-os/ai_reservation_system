@@ -80,6 +80,7 @@ def chat_with_ai():
     try:
         data = request.get_json()
         message = data.get('message', '').strip()
+        session_id = data.get('sessionId', '')
 
         if not message:
             return jsonify({
@@ -87,8 +88,14 @@ def chat_with_ai():
                 'error': 'メッセージが入力されていません'
             }), 400
 
+        if not session_id:
+            return jsonify({
+                'success': False,
+                'error': 'セッションIDが指定されていません'
+            }), 400
+
         ai_service = AIService()
-        result = ai_service.process_chat_message(message, user_name)
+        result = ai_service.process_chat_message(message, user_name, session_id)
 
         return jsonify(result)
 

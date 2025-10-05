@@ -11,16 +11,23 @@
 └─────────────────┘    └──────────────────┘    └─────────────────┘
          │                       │                       │
          │ HTTP Request          │ Function Calling      │
+         │ (with SessionID)      │                       │
          ├──────────────────────►│──────────────────────►│
          │                       │                       │
          │ JSON Response         │ AI Response           │
          ◄──────────────────────┤◄──────────────────────┤
          │                       │                       │
          │                       │                       │
-    ┌─────────────────┐    ┌──────────────────┐
-    │   Static Files  │    │   Database       │
-    │   (JS/CSS)      │    │   (SQLite)       │
-    └─────────────────┘    └──────────────────┘
+    ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+    │   Static Files  │    │   Database       │    │   Redis         │
+    │   (JS/CSS)      │    │   (SQLite)       │    │   (Chat History)│
+    └─────────────────┘    └──────────────────┘    └─────────────────┘
+                                                             ▲
+                                                             │
+                                                    ┌────────┴────────┐
+                                                    │  redis_service  │
+                                                    │  (Python)       │
+                                                    └─────────────────┘
 ```
 
 ## コンポーネント詳細
@@ -31,21 +38,31 @@
 - OpenAI API との統合
 - Function Calling の管理
 - 自然言語の意図解析
+- チャット履歴の管理（RedisService経由）
 
 #### 主要メソッド
 
 ```python
 class AIService:
-    def process_chat_message(message, user_name):
-        """メイン処理: ユーザーメッセージを解析しAPIを呼び出し"""
+    def __init__(self):
+        """OpenAI/Azure OpenAI クライアントとRedisサービスの初期化"""
+        self.redis_service = RedisService()
 
-    def _call_create_reservation_api(args, user_name):
+    def process_chat_message(message, user_name, session_id):
+        """
+        メイン処理: ユーザーメッセージを解析しAPIを呼び出し
+        - チャット履歴をRedisから取得
+        - 履歴と共にLLMに送信
+        - 応答をRedisに保存
+        """
+
+    def _call_create_reservation_api(args):
         """予約作成API呼び出し（/api/reservations）"""
 
     def _call_get_reservations_api(args):
         """予約一覧取得API呼び出し"""
 
-    def _call_cancel_reservation_api(args, user_name):
+    def _call_cancel_reservation_api(args):
         """予約キャンセルAPI呼び出し"""
 ```
 
@@ -99,7 +116,53 @@ class ReservationService:
         """時間重複チェック"""
 ```
 
-### 3. Models (models.py)
+### 3. RedisService (redis_service.py)
+
+#### 責任
+- Redisへの接続管理
+- セッション毎のチャット履歴管理
+- TTL（有効期限）管理
+
+#### 主要メソッド
+
+```python
+class RedisService:
+    def __init__(self):
+        """Redis接続の初期化（環境変数から設定読み込み）"""
+
+    def add_message(session_id, role, content):
+        """
+        チャット履歴にメッセージを追加
+        - role: "user" | "assistant" | "system"
+        - TTLをリフレッシュ
+        """
+
+    def get_history(session_id):
+        """セッションのチャット履歴を取得（リスト形式）"""
+
+    def clear_history(session_id):
+        """セッションのチャット履歴をクリア"""
+
+    def get_history_count(session_id):
+        """チャット履歴件数を取得"""
+```
+
+#### Redisデータ構造
+
+```
+Key: chat_history:{session_id}
+Type: List
+Value: JSON文字列の配列
+Example:
+  [
+    '{"role": "user", "content": "明日14時から会議室Aを予約"}',
+    '{"role": "assistant", "content": "予約が完了しました！"}',
+    ...
+  ]
+TTL: 86400秒（24時間、設定可能）
+```
+
+### 4. Models (models.py)
 
 #### データベーススキーマ
 
@@ -119,7 +182,7 @@ class Reservation(Base):
     end_time: Mapped[datetime] = mapped_column(DateTime)
 ```
 
-### 4. Frontend Architecture
+### 5. Frontend Architecture
 
 #### JavaScript モジュール構成
 
@@ -197,7 +260,8 @@ POST /api/chat
 Content-Type: application/json
 
 {
-    "message": "明日14時から会議室Aを1時間予約してください"
+    "message": "明日14時から会議室Aを1時間予約してください",
+    "sessionId": "550e8400-e29b-41d4-a716-446655440000"
 }
 
 Response:
@@ -207,6 +271,18 @@ Response:
     "response": "予約が完了しました！",
     "reservation": { /* 予約データ */ }
 }
+```
+
+#### チャット履歴の流れ
+
+```
+1. クライアント: セッションID生成（初回のみ）
+2. クライアント → サーバー: メッセージ + セッションID送信
+3. サーバー: Redisから履歴取得
+4. サーバー: 履歴 + 新メッセージをLLMに送信
+5. LLM: 文脈を考慮した応答生成
+6. サーバー: ユーザーメッセージとAI応答をRedisに保存
+7. サーバー → クライアント: 応答返却
 ```
 
 ## フロントエンド技術詳細
@@ -256,7 +332,15 @@ updateSendButton() {
 }
 ```
 
-## OpenAI Function Calling実装
+## OpenAI Tool Calling実装（OpenAI 2.x対応）
+
+### 重要な変更点
+
+OpenAI 1.x → 2.x での主な変更:
+- `functions` → `tools` パラメータ
+- `function_call` → `tool_choice` パラメータ
+- Function Call オブジェクトが辞書からオブジェクトに変更
+- アクセス方法: `call.get("type")` → `call.type`
 
 ### システムプロンプト例
 
@@ -277,28 +361,46 @@ system_prompt = f"""
 """
 ```
 
-### Function Call処理フロー
+### Tool Call処理フロー（OpenAI 2.x）
 
 ```python
+# ツール定義
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "create_reservation",
+            "description": "会議室の予約を作成する",
+            "parameters": { ... }
+        }
+    }
+]
+
+# API呼び出し
 response = self.client.chat.completions.create(
-    model="gpt-3.5-turbo",
+    model=self.model,
     messages=[
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": message}
     ],
-    functions=functions,
-    function_call="auto",
+    tools=tools,
+    tool_choice="auto",
     temperature=0.1
 )
 
-# Function Callingがある場合
-if response.choices[0].message.function_call:
-    function_name = response.choices[0].message.function_call.name
-    function_args = json.loads(response.choices[0].message.function_call.arguments)
+# Tool Callingがある場合（OpenAI 2.x形式）
+msg = response.choices[0].message
+tool_calls = getattr(msg, "tool_calls", None)
 
-    # 対応する内部API呼び出し
-    if function_name == "create_reservation":
-        return self._call_create_reservation_api(function_args, user_name)
+if tool_calls:
+    call = tool_calls[0]
+    if call.type == "function":  # オブジェクトアクセス
+        function_name = call.function.name
+        function_args = json.loads(call.function.arguments)
+
+        # 対応する内部API呼び出し
+        if function_name == "create_reservation":
+            return self._call_create_reservation_api(function_args)
 ```
 
 ## エラーハンドリング
