@@ -58,13 +58,13 @@ class AIService:
                     "type": "function",
                     "function": {
                         "name": "create_reservation",
-                        "description": "会議室の予約を作成する",
+                        "description": "会議室の予約を作成する。ユーザーから受け取った部屋名を利用可能な会議室リストから検索してroom_idに変換してください。",
                         "parameters": {
                             "type": "object",
                             "properties": {
                                 "room_id": {
                                     "type": "integer",
-                                    "description": "会議室ID"
+                                    "description": "会議室ID。ユーザーが指定した部屋名から該当するIDを見つけて設定してください。"
                                 },
                                 "date": {
                                     "type": "string",
@@ -80,6 +80,22 @@ class AIService:
                                 }
                             },
                             "required": ["room_id", "date", "start_time", "end_time"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "find_available_rooms",
+                        "description": "指定の開始時刻と利用時間で空いている会議室を検索する。ユーザーが部屋を指定せずに予約したい場合は必ずこの関数を最初に呼び出してください。",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "date": {"type": "string", "description": "予約日 (YYYY-MM-DD形式)"},
+                                "start_time": {"type": "string", "description": "開始時刻 (HH:MM形式、例: 14:00)"},
+                                "duration_minutes": {"type": "integer", "description": "利用時間（分単位、例: 60分=1時間）"}
+                            },
+                            "required": ["date", "start_time", "duration_minutes"]
                         }
                     }
                 },
@@ -124,7 +140,7 @@ class AIService:
 あなたは会議室予約システムのAIアシスタントです。
 ユーザーのメッセージを解析して、適切な関数を呼び出して予約関連の操作を実行してください。
 
-利用可能な会議室:
+利用可能な会議室（名前とID）:
 {room_info}
 
 現在の日時: {now.strftime("%Y年%m月%d日 %H:%M")} (JST)
@@ -135,7 +151,26 @@ class AIService:
 - 時間は24時間形式で解析してください
 - 期間が指定されない場合は1時間としてください
 
-ユーザーが予約、キャンセル、確認を求めた場合は、適切な関数を呼び出してください。
+予約処理のフロー（必ず以下の順序で実行）:
+1. ユーザーが会議室を指定していない場合:
+   - 必ずfind_available_rooms関数で空き部屋を検索してください
+   - 検索結果をユーザーに提示してください
+   - ユーザーが部屋を選択してから予約を実行してください
+
+2. ユーザーが会議室名を指定している場合:
+   - 上記の「利用可能な会議室」リストから部屋名に対応するIDを見つけてください
+   - 見つけたroom_idを使ってcreate_reservation関数を呼び出してください
+   - 例: ユーザーが「会議室A」と言った場合、リストから「会議室A (ID: 1)」を見つけて、room_id=1で予約
+
+3. 予約確認・キャンセル:
+   - get_reservations関数で予約一覧を取得
+   - cancel_reservation関数で予約をキャンセル
+
+重要なルール:
+- ユーザーとのやり取りは常に「部屋名」を使用してください
+- 関数呼び出し時は必ず「部屋ID」に変換してください
+- 部屋名からIDへの変換は上記の会議室リストを参照してください
+- 部屋名が曖昧な場合は、部分一致で検索してください（例: 「A」→「会議室A」）
 """
 
             # チャット履歴を取得（セッションIDがある場合）
@@ -181,6 +216,8 @@ class AIService:
                     result = None
                     if fn == "create_reservation":
                         result = self._call_create_reservation_api(fn_args)
+                    elif fn == "find_available_rooms":
+                        result = self._call_find_available_rooms_api(fn_args)
                     elif fn == "get_reservations":
                         result = self._call_get_reservations_api(fn_args)
                     elif fn == "cancel_reservation":
@@ -198,7 +235,7 @@ class AIService:
             # AIの応答を履歴に保存
             if session_id:
                 self.redis_service.add_message(session_id, "assistant", ai_response)
-
+            
             return {
                 "success": True,
                 "response": ai_response,
@@ -212,15 +249,62 @@ class AIService:
                 "response": "申し訳ありませんが、システムエラーが発生しました。"
             }
 
+    def _call_find_available_rooms_api(self, args):
+        """予約可能な部屋の検索を実行"""
+        try:
+            date = args.get("date")
+            start_time = args.get("start_time")
+            duration = int(args.get("duration_minutes")) if args.get("duration_minutes") is not None else None
+            if not all([date, start_time, duration]):
+                return {
+                    "success": True,
+                    "response": "検索に必要な情報が不足しています（date, start_time, duration_minutes）",
+                    "action": "check"
+                }
+
+            rooms = ReservationService.find_available_rooms_by_start_datetime_and_duration(date, start_time, duration)
+            if rooms:
+                text = "\n".join([f"- {r['name']}" for r in rooms])
+                return {
+                    "success": True,
+                    "response": f"空いている部屋:\n{text}\n予約する部屋名を教えてください。例えば『{rooms[0]['name']}』のように返信してください。",
+                    "action": "check",
+                    "rooms": rooms
+                }
+            else:
+                return {
+                    "success": True,
+                    "response": "指定の時間帯で空いている部屋はありません。",
+                    "action": "check",
+                    "rooms": []
+                }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "response": "空き状況の確認中にエラーが発生しました。"
+            }
+
     def _call_create_reservation_api(self, args):
         """REST APIを呼び出して予約を作成し、LLMに結果を返す"""
         url = f"{self.base_url}/api/reservations"
+
+        # room_idは必須（AIが部屋名からIDに変換済み）
+        room_id = args.get("room_id")
+        if not room_id:
+            return {
+                "success": True,
+                "response": "部屋IDが指定されていません。システムエラーです。",
+                "action": "reserve"
+            }
+
         data = {
-            "room-id": str(args["room_id"]),
+            "room-id": str(room_id),
             "date": args["date"],
             "start-time": args["start_time"],
             "end-time": args["end_time"]
         }
+
         try:
             response = requests.post(url, json=data, headers={"Content-Type": "application/json"})
             result = response.json()
