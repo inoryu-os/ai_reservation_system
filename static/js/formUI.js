@@ -31,6 +31,21 @@ export class ReservationFormUI {
 
     // 送信イベント
     this.form.addEventListener("submit", (e) => this.handleSubmit(e));
+
+    // 日付選択変更イベント
+    if (this.dateInput) {
+      this.dateInput.addEventListener("change", (e) => this.handleDateChange(e));
+    }
+  }
+
+  async handleDateChange(event) {
+    const selectedDate = event.target.value;
+    if (!selectedDate) return;
+
+    // カレンダーの選択を同期
+    if (window.CompactCalendar) {
+      window.CompactCalendar.selectDateFromExternal(selectedDate);
+    }
   }
 
   async handleSubmit(event) {
@@ -38,6 +53,9 @@ export class ReservationFormUI {
     if (!this.form) return;
 
     const payload = getFormData(this.form);
+
+    // 現在選択されている日付を保存
+    const currentDate = this.dateInput ? this.dateInput.value : null;
 
     // 送信中のUI状態
     this.setSubmitting(true);
@@ -50,9 +68,9 @@ export class ReservationFormUI {
         }
         resetForm(this.form);
 
-        // 送信後も今日の日付に戻す（UXのため）
-        if (this.dateInput) {
-          this.dateInput.value = getTodayJST();
+        // 選択されていた日付を維持
+        if (this.dateInput && currentDate) {
+          this.dateInput.value = currentDate;
         }
       } else {
         // エラーはAPI側で整形済み。必要ならアラート等で表示

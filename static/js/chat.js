@@ -179,16 +179,25 @@ class ChatManager {
         this.rotateSessionId();
     }
 
-    updateReservationTable(reservation) {
-        // 既存の予約表示機能を使用
-        if (window.displayReservationInTable) {
-            window.displayReservationInTable(reservation, true);
+    async updateReservationTable(reservation) {
+        // 予約日を取得
+        const reservationDate = reservation.date;
+
+        if (!reservationDate) return;
+
+        // カレンダーを予約日に移動（予約表とフォームも自動更新される）
+        if (window.CompactCalendar) {
+            await window.CompactCalendar.selectDateFromExternal(reservationDate, true);
         }
     }
 
-    refreshReservationTable() {
-        // 今日の予約を再読み込み
-        if (window.loadTodaysReservations) {
+    async refreshReservationTable() {
+        // 現在表示中の日付の予約を再読み込み
+        if (window.CompactCalendar && window.CompactCalendar.selectedDate) {
+            // 選択中の日付で予約表を更新
+            await window.CompactCalendar.updateReservationTable(window.CompactCalendar.selectedDate);
+        } else if (window.loadTodaysReservations) {
+            // フォールバック: 今日の予約を再読み込み
             window.loadTodaysReservations();
         }
     }
