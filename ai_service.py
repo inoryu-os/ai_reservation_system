@@ -132,6 +132,23 @@ class AIService:
                             "required": ["reservation_id"]
                         }
                     }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_my_reservations",
+                        "description": "ユーザー自身の予約一覧を取得する。「今日の予約」「私の予約」「自分の予約」などのフレーズで呼び出す。",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "date": {
+                                    "type": "string",
+                                    "description": "予約を確認する日付 (YYYY-MM-DD形式、省略時は全期間)"
+                                }
+                            },
+                            "required": []
+                        }
+                    }
                 }
             ]
 
@@ -139,6 +156,8 @@ class AIService:
             system_prompt = f"""
 あなたは会議室予約システムのAIアシスタントです。
 ユーザーのメッセージを解析して、適切な関数を呼び出して予約関連の操作を実行してください。
+
+現在のユーザー名: {user_name}
 
 利用可能な会議室（名前とID）:
 {room_info}
@@ -162,8 +181,11 @@ class AIService:
    - 見つけたroom_idを使ってcreate_reservation関数を呼び出してください
    - 例: ユーザーが「会議室A」と言った場合、リストから「会議室A (ID: 1)」を見つけて、room_id=1で予約
 
-3. 予約確認・キャンセル:
-   - get_reservations関数で予約一覧を取得
+3. 予約確認:
+   - 「今日の予約」「私の予約」「自分の予約」などのフレーズ → get_my_reservations関数を使用（現在のユーザーの予約のみ）
+   - 特定の日付の全体の予約状況を確認 → get_reservations関数を使用（全ユーザーの予約）
+
+4. 予約キャンセル:
    - cancel_reservation関数で予約をキャンセル
 
 重要なルール:
@@ -171,6 +193,7 @@ class AIService:
 - 関数呼び出し時は必ず「部屋ID」に変換してください
 - 部屋名からIDへの変換は上記の会議室リストを参照してください
 - 部屋名が曖昧な場合は、部分一致で検索してください（例: 「A」→「会議室A」）
+- ユーザーが「自分の予約」を確認したい場合は必ずget_my_reservations関数を使用してください
 """
 
             # チャット履歴を取得（セッションIDがある場合）
@@ -220,6 +243,8 @@ class AIService:
                         result = self._call_find_available_rooms_api(fn_args)
                     elif fn == "get_reservations":
                         result = self._call_get_reservations_api(fn_args)
+                    elif fn == "get_my_reservations":
+                        result = self._call_get_my_reservations_api(fn_args, user_name)
                     elif fn == "cancel_reservation":
                         result = self._call_cancel_reservation_api(fn_args)
 
@@ -394,4 +419,56 @@ class AIService:
                 "success": False,
                 "error": str(e),
                 "response": "キャンセル処理中にエラーが発生しました。"
+            }
+
+    def _call_get_my_reservations_api(self, args, user_name):
+        """ユーザー自身の予約一覧を取得"""
+        try:
+            date = args.get("date")
+            result = ReservationService.get_reservations_by_username(user_name, date)
+
+            if result.get("success"):
+                reservations = result["reservations"]
+                if reservations:
+                    reservation_list = "\n".join([
+                        f"- {r['room_name']} {r['start_time']}~{r['end_time']} ({r['date']})"
+                        for r in reservations
+                    ])
+                    if date:
+                        return {
+                            "success": True,
+                            "response": f"{date}のあなたの予約:\n{reservation_list}",
+                            "action": "check"
+                        }
+                    else:
+                        return {
+                            "success": True,
+                            "response": f"あなたの予約一覧:\n{reservation_list}",
+                            "action": "check"
+                        }
+                else:
+                    if date:
+                        return {
+                            "success": True,
+                            "response": f"{date}にあなたの予約はありません。",
+                            "action": "check"
+                        }
+                    else:
+                        return {
+                            "success": True,
+                            "response": "あなたの予約はありません。",
+                            "action": "check"
+                        }
+            else:
+                return {
+                    "success": True,
+                    "response": "予約状況の確認中にエラーが発生しました。",
+                    "action": "check"
+                }
+
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "response": "確認処理中にエラーが発生しました。"
             }

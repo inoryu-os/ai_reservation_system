@@ -125,24 +125,37 @@ class ReservationService:
             return {"success": False, "error": f"サーバーエラーが発生しました: {str(e)}"}
         
     @staticmethod
-    def get_reservations_by_username(user_name: str) -> Dict[str, Any]:
+    def get_reservations_by_username(user_name: str, date: Optional[str] = None) -> Dict[str, Any]:
         """
         指定されたユーザー名の予約一覧を取得する
 
         Args:
             user_name: ユーザー名
+            date: 日付 (YYYY-MM-DD形式、省略時は全期間)
 
         Returns:
             取得結果とデータ
         """
         try:
             with models.get_session() as session:
-                reservations = session.scalars(
+                # 基本クエリ
+                stmt = (
                     select(models.Reservation)
                     .where(models.Reservation.user_name == user_name)
                     .options(selectinload(models.Reservation.room))
                     .order_by(models.Reservation.start_time)
-                ).all()
+                )
+
+                # 日付が指定されている場合はフィルタを追加
+                if date:
+                    target_date_jst = parse_datetime_jst(date, "00:00")
+                    next_day_jst = target_date_jst + timedelta(days=1)
+                    stmt = stmt.where(
+                        models.Reservation.start_time >= target_date_jst,
+                        models.Reservation.start_time < next_day_jst
+                    )
+
+                reservations = session.scalars(stmt).all()
 
                 result = []
                 for reservation in reservations:
