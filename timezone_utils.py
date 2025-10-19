@@ -57,3 +57,72 @@ def setup_timezone():
     except AttributeError:
         # Windows環境では tzset が利用できない場合がある
         pass
+
+def round_down_to_30min(dt: datetime) -> datetime:
+    """
+    時刻を30分刻みで切り下げ
+
+    例:
+        14:04 → 14:00
+        14:35 → 14:30
+        14:00 → 14:00
+        14:30 → 14:30
+
+    Args:
+        dt: 対象のdatetime
+
+    Returns:
+        30分刻みに切り下げられたdatetime
+    """
+    minutes = dt.minute
+    rounded_minutes = (minutes // 30) * 30  # 0 or 30
+    return dt.replace(minute=rounded_minutes, second=0, microsecond=0)
+
+def get_next_30min_slot(dt: datetime) -> datetime:
+    """
+    次の30分区切りを取得
+
+    例:
+        14:04 → 14:30
+        14:30 → 15:00
+        14:00 → 14:30
+        14:35 → 15:00
+
+    Args:
+        dt: 対象のdatetime
+
+    Returns:
+        次の30分区切りのdatetime
+    """
+    rounded_down = round_down_to_30min(dt)
+    return rounded_down + timedelta(minutes=30)
+
+def calculate_reservation_time_for_now(current_time: datetime, duration_minutes: int) -> tuple[str, str]:
+    """
+    「今から」の予約時刻を計算
+
+    ロジック:
+        - 開始時刻 = 現在時刻を30分刻みで切り下げ
+        - 終了時刻 = 次の30分区切り + 利用時間
+
+    例:
+        14:04に「今から30分」 → ("14:00", "15:00")
+            - 開始: 14:00 (切り下げ)
+            - 終了: 14:30 (次の区切り) + 30分 = 15:00
+
+        14:04に「今から60分」 → ("14:00", "15:30")
+            - 開始: 14:00 (切り下げ)
+            - 終了: 14:30 (次の区切り) + 60分 = 15:30
+
+    Args:
+        current_time: 現在時刻
+        duration_minutes: 利用時間（分）
+
+    Returns:
+        (start_time, end_time) のタプル (HH:MM形式の文字列)
+    """
+    start_dt = round_down_to_30min(current_time)
+    next_slot_dt = get_next_30min_slot(current_time)
+    end_dt = next_slot_dt + timedelta(minutes=duration_minutes)
+
+    return (format_jst_time(start_dt), format_jst_time(end_dt))

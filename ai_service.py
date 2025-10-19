@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from openai import OpenAI, AzureOpenAI
 from reservation_service import ReservationService
 import models
-from timezone_utils import get_jst_now, format_jst_date
+from timezone_utils import get_jst_now, format_jst_date, format_jst_time, round_down_to_30min, get_next_30min_slot, calculate_reservation_time_for_now
 from redis_service import RedisService
 
 class AIService:
@@ -51,6 +51,12 @@ class AIService:
             # 現在の日時（JST）
             now = get_jst_now()
             today = format_jst_date(now)
+
+            # 「今から」予約用の時刻情報（30分刻み）
+            rounded_start = round_down_to_30min(now)
+            next_slot = get_next_30min_slot(now)
+            rounded_start_str = format_jst_time(rounded_start)
+            next_slot_str = format_jst_time(next_slot)
 
             # Tools（関数ツール）の定義（最新の推奨インターフェース）
             tools = [
@@ -163,12 +169,33 @@ class AIService:
 {room_info}
 
 現在の日時: {now.strftime("%Y年%m月%d日 %H:%M")} (JST)
+予約可能な開始時刻: {rounded_start_str} (現在時刻を30分刻みで切り下げた時刻)
+次の30分区切り: {next_slot_str}
 
 日時の解析ルール:
 - 「明日」= {format_jst_date(now + timedelta(days=1))}
 - 「今日」= {today}
 - 時間は24時間形式で解析してください
 - 期間が指定されない場合は1時間としてください
+
+予約時刻の重要なルール:
+- **予約時刻は必ず30分刻み（00分または30分）にしてください**
+- 「今から」「今すぐ」などのフレーズが使われた場合は、以下の時刻で予約してください:
+  * 開始時刻: {rounded_start_str}
+  * 終了時刻: {next_slot_str}の30分後 + さらに利用時間を加算
+
+  **具体例で理解してください:**
+  現在が{now.strftime("%H:%M")}の場合、
+
+  「今から30分利用したい」→ start_time: "{rounded_start_str}", end_time: 以下を計算
+    {next_slot_str} (直後の区切り) の30分後 = {format_jst_time(next_slot + timedelta(minutes=30))}
+    ↑これが終了時刻
+
+  「今から60分利用したい」→ start_time: "{rounded_start_str}", end_time: 以下を計算
+    {next_slot_str} (直後の区切り) の60分後 = {format_jst_time(next_slot + timedelta(minutes=60))}
+    ↑これが終了時刻
+
+- 具体的な時刻が指定された場合も、必ず30分刻みの時刻（例: 14:00, 14:30, 15:00）を使用してください
 
 予約処理のフロー（必ず以下の順序で実行）:
 1. ユーザーが会議室を指定していない場合:
@@ -189,6 +216,8 @@ class AIService:
    - cancel_reservation関数で予約をキャンセル
 
 重要なルール:
+- **ユーザーが英語でメッセージを送った場合は、英語で応答してください**
+- **ユーザーが日本語でメッセージを送った場合は、日本語で応答してください**
 - ユーザーとのやり取りは常に「部屋名」を使用してください
 - 関数呼び出し時は必ず「部屋ID」に変換してください
 - 部屋名からIDへの変換は上記の会議室リストを参照してください
