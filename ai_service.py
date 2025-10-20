@@ -244,6 +244,18 @@ class AIService:
 - 部屋名からIDへの変換は上記の会議室リストを参照してください
 - 部屋名が曖昧な場合は、部分一致で検索してください（例: 「A」→「会議室A」）
 - ユーザーが「自分の予約」を確認したい場合は必ずget_my_reservations関数を使用してください
+
+関数実行後のレスポンス形式:
+- **create_reservation成功時**: 「予約が完了しました！[部屋名]を[日付] [開始時刻]から[終了時刻]まで予約しました。」(英語の場合: "Reservation completed! [room_name] has been booked from [start_time] to [end_time] on [date].")
+- **create_reservation失敗時**: 「予約できませんでした: [エラー理由]」(英語の場合: "Reservation failed: [error_reason]")
+- **find_available_rooms結果あり**: 「空いている部屋:\n- [部屋名]\n...\n予約する部屋名を教えてください。例えば『[部屋名]』のように返信してください。」(英語の場合: "Available rooms:\n- [room_name]\n...\nPlease tell me which room you'd like to book. For example, reply with '[room_name]'.")
+- **find_available_rooms結果なし**: 「指定の時間帯で空いている部屋はありません。」(英語の場合: "No rooms are available for the specified time.")
+- **get_reservations/get_my_reservations結果あり**: 「[日付]の予約状況:\n- [部屋名] [開始時刻]~[終了時刻] ([ユーザー名])」の形式でリスト表示
+- **get_reservations/get_my_reservations結果なし**: 「[日付]には予約がありません。」または「あなたの予約はありません。」
+- **cancel_reservation成功時**: 「予約をキャンセルしました。」(英語の場合: "Reservation cancelled successfully.")
+- **cancel_reservation失敗時**: 「キャンセルできませんでした: [エラー理由]」
+
+常にフレンドリーで丁寧な口調で応答してください。
 """
 
             # チャット履歴を取得（セッションIDがある場合）
@@ -270,47 +282,84 @@ class AIService:
             msg = response.choices[0].message
             tool_calls = getattr(msg, "tool_calls", None)
 
-            # AIの応答をチャット履歴に保存
+            # ユーザーメッセージを履歴に保存
             if session_id:
-                # ユーザーメッセージを保存
                 self.redis_service.add_message(session_id, "user", message)
 
             if tool_calls:
-                # 今回は最初の tool_call を処理
-                call = tool_calls[0]
-                if call.type == "function":
-                    fn = call.function.name
-                    args_json = call.function.arguments or "{}"
-                    try:
-                        fn_args = json.loads(args_json)
-                    except Exception:
-                        fn_args = {}
+                # アシスタントのメッセージ（tool_calls含む）を履歴に追加
+                messages.append({
+                    "role": "assistant",
+                    "content": msg.content,
+                    "tool_calls": [
+                        {
+                            "id": call.id,
+                            "type": call.type,
+                            "function": {
+                                "name": call.function.name,
+                                "arguments": call.function.arguments
+                            }
+                        } for call in tool_calls
+                    ]
+                })
 
-                    result = None
-                    if fn == "create_reservation":
-                        result = self._call_create_reservation_api(fn_args, user_language)
-                    elif fn == "find_available_rooms":
-                        result = self._call_find_available_rooms_api(fn_args, user_language)
-                    elif fn == "get_reservations":
-                        result = self._call_get_reservations_api(fn_args, user_language)
-                    elif fn == "get_my_reservations":
-                        result = self._call_get_my_reservations_api(fn_args, user_name, user_language)
-                    elif fn == "cancel_reservation":
-                        result = self._call_cancel_reservation_api(fn_args, user_language)
+                # 各tool_callの結果を取得してmessagesに追加
+                for call in tool_calls:
+                    if call.type == "function":
+                        fn = call.function.name
+                        args_json = call.function.arguments or "{}"
+                        try:
+                            fn_args = json.loads(args_json)
+                        except Exception:
+                            fn_args = {}
 
-                    # AIの応答を履歴に保存
-                    if session_id and result:
-                        self.redis_service.add_message(session_id, "assistant", result.get("response", ""))
+                        # 実際の関数を呼び出し
+                        tool_result = None
+                        if fn == "create_reservation":
+                            tool_result = self._execute_create_reservation(fn_args)
+                        elif fn == "find_available_rooms":
+                            tool_result = self._execute_find_available_rooms(fn_args)
+                        elif fn == "get_reservations":
+                            tool_result = self._execute_get_reservations(fn_args)
+                        elif fn == "get_my_reservations":
+                            tool_result = self._execute_get_my_reservations(fn_args, user_name)
+                        elif fn == "cancel_reservation":
+                            tool_result = self._execute_cancel_reservation(fn_args)
 
-                    return result
+                        # tool の実行結果をmessagesに追加
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": call.id,
+                            "content": json.dumps(tool_result, ensure_ascii=False)
+                        })
 
-            # 通常の応答
+                # LLMに再度リクエストしてレスポンスを生成させる
+                second_response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=0.1
+                )
+
+                final_message = second_response.choices[0].message
+                ai_response = final_message.content
+
+                # AIの応答を履歴に保存
+                if session_id:
+                    self.redis_service.add_message(session_id, "assistant", ai_response)
+
+                return {
+                    "success": True,
+                    "response": ai_response,
+                    "action": self._determine_action(tool_calls[0].function.name)
+                }
+
+            # 通常の応答（tool_calls がない場合）
             ai_response = msg.content
 
             # AIの応答を履歴に保存
             if session_id:
                 self.redis_service.add_message(session_id, "assistant", ai_response)
-            
+
             return {
                 "success": True,
                 "response": ai_response,
@@ -324,61 +373,53 @@ class AIService:
                 "response": "申し訳ありませんが、システムエラーが発生しました。"
             }
 
-    def _call_find_available_rooms_api(self, args, lang="ja"):
-        """予約可能な部屋の検索を実行"""
+    def _determine_action(self, function_name: str) -> str:
+        """関数名からアクションタイプを判定"""
+        action_map = {
+            "create_reservation": "reserve",
+            "find_available_rooms": "check",
+            "get_reservations": "check",
+            "get_my_reservations": "check",
+            "cancel_reservation": "cancel"
+        }
+        return action_map.get(function_name, "info")
+
+    def _execute_find_available_rooms(self, args):
+        """予約可能な部屋の検索を実行（結果をJSONで返す）"""
         try:
             date = args.get("date")
             start_time = args.get("start_time")
             duration = int(args.get("duration_minutes")) if args.get("duration_minutes") is not None else None
+
             if not all([date, start_time, duration]):
-                msg = "検索に必要な情報が不足しています（date, start_time, duration_minutes）" if lang == "ja" else "Missing required information (date, start_time, duration_minutes)"
                 return {
-                    "success": True,
-                    "response": msg,
-                    "action": "check"
+                    "success": False,
+                    "error": "検索に必要な情報が不足しています（date, start_time, duration_minutes）"
                 }
 
             rooms = ReservationService.find_available_rooms_by_start_datetime_and_duration(date, start_time, duration)
-            if rooms:
-                text = "\n".join([f"- {r['name']}" for r in rooms])
-                if lang == "ja":
-                    msg = f"空いている部屋:\n{text}\n予約する部屋名を教えてください。例えば『{rooms[0]['name']}』のように返信してください。"
-                else:
-                    msg = f"Available rooms:\n{text}\nPlease tell me which room you'd like to book. For example, reply with '{rooms[0]['name']}'."
-                return {
-                    "success": True,
-                    "response": msg,
-                    "action": "check",
-                    "rooms": rooms
-                }
-            else:
-                msg = "指定の時間帯で空いている部屋はありません。" if lang == "ja" else "No rooms are available for the specified time."
-                return {
-                    "success": True,
-                    "response": msg,
-                    "action": "check",
-                    "rooms": []
-                }
-        except Exception as e:
-            msg = "空き状況の確認中にエラーが発生しました。" if lang == "ja" else "An error occurred while checking availability."
-            return {
-                "success": False,
-                "error": str(e),
-                "response": msg
-            }
-
-    def _call_create_reservation_api(self, args, lang="ja"):
-        """REST APIを呼び出して予約を作成し、LLMに結果を返す"""
-        url = f"{self.base_url}/api/reservations"
-
-        # room_idは必須（AIが部屋名からIDに変換済み）
-        room_id = args.get("room_id")
-        if not room_id:
-            msg = "部屋IDが指定されていません。システムエラーです。" if lang == "ja" else "Room ID not specified. System error."
             return {
                 "success": True,
-                "response": msg,
-                "action": "reserve"
+                "rooms": rooms,
+                "date": date,
+                "start_time": start_time,
+                "duration_minutes": duration
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"空き状況の確認中にエラーが発生しました: {str(e)}"
+            }
+
+    def _execute_create_reservation(self, args):
+        """予約を作成（結果をJSONで返す）"""
+        url = f"{self.base_url}/api/reservations"
+
+        room_id = args.get("room_id")
+        if not room_id:
+            return {
+                "success": False,
+                "error": "部屋IDが指定されていません"
             }
 
         data = {
@@ -393,164 +434,92 @@ class AIService:
             result = response.json()
 
             if response.status_code == 200 and result.get("success"):
-                if lang == "ja":
-                    msg = f"予約が完了しました！{result['reservation']['room_name']}を{args['date']} {args['start_time']}から{args['end_time']}まで予約しました。"
-                else:
-                    msg = f"Reservation completed! {result['reservation']['room_name']} has been booked from {args['start_time']} to {args['end_time']} on {args['date']}."
                 return {
                     "success": True,
-                    "response": msg,
-                    "action": "reserve",
                     "reservation": result["reservation"]
                 }
             else:
-                error_msg = result.get('error', '不明なエラー' if lang == "ja" else 'Unknown error')
-                msg = f"予約できませんでした: {error_msg}" if lang == "ja" else f"Reservation failed: {error_msg}"
                 return {
-                    "success": True,
-                    "response": msg,
-                    "action": "reserve"
+                    "success": False,
+                    "error": result.get('error', '不明なエラー')
                 }
 
         except Exception as e:
-            msg = "予約処理中にエラーが発生しました。" if lang == "ja" else "An error occurred during reservation."
             return {
                 "success": False,
-                "error": str(e),
-                "response": msg
+                "error": f"予約処理中にエラーが発生しました: {str(e)}"
             }
 
-    def _call_get_reservations_api(self, args, lang="ja"):
-        """REST APIを呼び出して予約一覧を取得"""
+    def _execute_get_reservations(self, args):
+        """予約一覧を取得（結果をJSONで返す）"""
         try:
             url = f"{self.base_url}/api/reservations/{args['date']}"
             response = requests.get(url)
             result = response.json()
 
             if response.status_code == 200 and result.get("success"):
-                reservations = result["reservations"]
-                if reservations:
-                    reservation_list = "\n".join([
-                        f"- {r['room_name']} {r['start_time']}~{r['end_time']} ({r['user_name']})"
-                        for r in reservations
-                    ])
-                    if lang == "ja":
-                        msg = f"{args['date']}の予約状況:\n{reservation_list}"
-                    else:
-                        msg = f"Reservations for {args['date']}:\n{reservation_list}"
-                    return {
-                        "success": True,
-                        "response": msg,
-                        "action": "check"
-                    }
-                else:
-                    msg = f"{args['date']}には予約がありません。" if lang == "ja" else f"No reservations on {args['date']}."
-                    return {
-                        "success": True,
-                        "response": msg,
-                        "action": "check"
-                    }
-            else:
-                msg = "予約状況の確認中にエラーが発生しました。" if lang == "ja" else "An error occurred while checking reservations."
                 return {
                     "success": True,
-                    "response": msg,
-                    "action": "check"
+                    "reservations": result["reservations"],
+                    "date": args['date']
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": "予約状況の確認中にエラーが発生しました"
                 }
 
         except Exception as e:
-            msg = "確認処理中にエラーが発生しました。" if lang == "ja" else "An error occurred during the check."
             return {
                 "success": False,
-                "error": str(e),
-                "response": msg
+                "error": f"確認処理中にエラーが発生しました: {str(e)}"
             }
 
-    def _call_cancel_reservation_api(self, args, lang="ja"):
-        """REST APIを呼び出して予約をキャンセル"""
+    def _execute_cancel_reservation(self, args):
+        """予約をキャンセル（結果をJSONで返す）"""
         try:
             url = f"{self.base_url}/api/reservations/{args['reservation_id']}"
             response = requests.delete(url)
             result = response.json()
 
             if response.status_code == 200 and result.get("success"):
-                msg = "予約をキャンセルしました。" if lang == "ja" else "Reservation cancelled successfully."
                 return {
                     "success": True,
-                    "response": msg,
-                    "action": "cancel"
+                    "reservation_id": args['reservation_id']
                 }
             else:
-                error_msg = result.get('error', '不明なエラー' if lang == "ja" else 'Unknown error')
-                msg = f"キャンセルできませんでした: {error_msg}" if lang == "ja" else f"Cancellation failed: {error_msg}"
                 return {
-                    "success": True,
-                    "response": msg,
-                    "action": "cancel"
+                    "success": False,
+                    "error": result.get('error', '不明なエラー')
                 }
 
         except Exception as e:
-            msg = "キャンセル処理中にエラーが発生しました。" if lang == "ja" else "An error occurred during cancellation."
             return {
                 "success": False,
-                "error": str(e),
-                "response": msg
+                "error": f"キャンセル処理中にエラーが発生しました: {str(e)}"
             }
 
-    def _call_get_my_reservations_api(self, args, user_name, lang="ja"):
-        """ユーザー自身の予約一覧を取得"""
+    def _execute_get_my_reservations(self, args, user_name):
+        """ユーザー自身の予約一覧を取得（結果をJSONで返す）"""
         try:
             date = args.get("date")
             result = ReservationService.get_reservations_by_username(user_name, date)
 
             if result.get("success"):
-                reservations = result["reservations"]
-                if reservations:
-                    reservation_list = "\n".join([
-                        f"- {r['room_name']} {r['start_time']}~{r['end_time']} ({r['date']})"
-                        for r in reservations
-                    ])
-                    if date:
-                        msg = f"{date}のあなたの予約:\n{reservation_list}" if lang == "ja" else f"Your reservations on {date}:\n{reservation_list}"
-                        return {
-                            "success": True,
-                            "response": msg,
-                            "action": "check"
-                        }
-                    else:
-                        msg = f"あなたの予約一覧:\n{reservation_list}" if lang == "ja" else f"Your reservations:\n{reservation_list}"
-                        return {
-                            "success": True,
-                            "response": msg,
-                            "action": "check"
-                        }
-                else:
-                    if date:
-                        msg = f"{date}にあなたの予約はありません。" if lang == "ja" else f"You have no reservations on {date}."
-                        return {
-                            "success": True,
-                            "response": msg,
-                            "action": "check"
-                        }
-                    else:
-                        msg = "あなたの予約はありません。" if lang == "ja" else "You have no reservations."
-                        return {
-                            "success": True,
-                            "response": msg,
-                            "action": "check"
-                        }
-            else:
-                msg = "予約状況の確認中にエラーが発生しました。" if lang == "ja" else "An error occurred while checking reservations."
                 return {
                     "success": True,
-                    "response": msg,
-                    "action": "check"
+                    "reservations": result["reservations"],
+                    "date": date,
+                    "user_name": user_name
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": result.get("error", "予約状況の確認中にエラーが発生しました")
                 }
 
         except Exception as e:
-            msg = "確認処理中にエラーが発生しました。" if lang == "ja" else "An error occurred during the check."
             return {
                 "success": False,
-                "error": str(e),
-                "response": msg
+                "error": f"確認処理中にエラーが発生しました: {str(e)}"
             }

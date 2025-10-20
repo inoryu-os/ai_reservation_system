@@ -92,8 +92,14 @@ export class ReservationTable {
     const bookingCells = document.querySelectorAll('.booking-cell');
     bookingCells.forEach(cell => {
       cell.innerHTML = '';
-      cell.classList.remove('table-warning');
+      cell.classList.remove('table-warning', 'table-success');
     });
+  }
+
+  isOwnReservation(userName) {
+    // window.CURRENT_USER_NAME と比較
+    const currentUser = window.CURRENT_USER_NAME || '';
+    return userName === currentUser;
   }
 
   displayReservationsInTable(reservations, includeCancel = false) {
@@ -112,6 +118,9 @@ export class ReservationTable {
 
     const { startHour, startMin, endHour, endMin } = this.parseTimeRange(start_time, end_time);
 
+    // 現在のユーザーの予約かどうかを判定
+    const isOwnReservation = this.isOwnReservation(user_name);
+
     const timeSlots = this.generateTimeSlots();
     timeSlots.forEach((slot, slotIndex) => {
       const slotTime = slot.hour * 60 + slot.min;
@@ -123,7 +132,12 @@ export class ReservationTable {
         const cell = bookingCells[cellIndex];
         if (cell) {
           cell.innerHTML = this.createReservationCellContent(user_name, reservation.id, includeCancel);
-          cell.classList.add('table-warning');
+          // 自分の予約の場合は異なる色を適用
+          if (isOwnReservation) {
+            cell.classList.add('table-success');
+          } else {
+            cell.classList.add('table-warning');
+          }
         }
       }
     });
