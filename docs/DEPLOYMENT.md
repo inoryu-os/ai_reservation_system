@@ -233,7 +233,7 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now().isoformat(),
-        'version': '1.2.0',
+        'version': '1.4.0',
         'timezone': 'JST'
     })
 ```

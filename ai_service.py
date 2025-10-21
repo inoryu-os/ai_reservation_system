@@ -304,6 +304,10 @@ class AIService:
                 })
 
                 # 各tool_callの結果を取得してmessagesに追加
+                # 最初のtool呼び出しの結果を保持（レスポンスに含めるため）
+                first_tool_result = None
+                first_function_name = None
+
                 for call in tool_calls:
                     if call.type == "function":
                         fn = call.function.name
@@ -326,6 +330,11 @@ class AIService:
                         elif fn == "cancel_reservation":
                             tool_result = self._execute_cancel_reservation(fn_args)
 
+                        # 最初のtool結果を保存
+                        if first_tool_result is None:
+                            first_tool_result = tool_result
+                            first_function_name = fn
+
                         # tool の実行結果をmessagesに追加
                         messages.append({
                             "role": "tool",
@@ -347,11 +356,24 @@ class AIService:
                 if session_id:
                     self.redis_service.add_message(session_id, "assistant", ai_response)
 
-                return {
+                # レスポンスを構築
+                response_data = {
                     "success": True,
                     "response": ai_response,
-                    "action": self._determine_action(tool_calls[0].function.name)
+                    "action": self._determine_action(first_function_name)
                 }
+
+                # create_reservationの場合、予約データを追加
+                if first_function_name == "create_reservation" and first_tool_result:
+                    if first_tool_result.get("success") and first_tool_result.get("reservation"):
+                        response_data["reservation"] = first_tool_result["reservation"]
+
+                # cancel_reservationの場合、予約IDを追加
+                if first_function_name == "cancel_reservation" and first_tool_result:
+                    if first_tool_result.get("success") and first_tool_result.get("reservation_id"):
+                        response_data["reservation_id"] = first_tool_result["reservation_id"]
+
+                return response_data
 
             # 通常の応答（tool_calls がない場合）
             ai_response = msg.content
