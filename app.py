@@ -13,7 +13,7 @@ from ai_service import AIService
 
 app = Flask(__name__)
 
-user_name = "userB"
+user_name = "guest"
 
 @app.route('/')
 def index():
