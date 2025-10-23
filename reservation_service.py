@@ -226,7 +226,7 @@ class ReservationService:
 
             rooms = session.scalars(stmt).all()
 
-            return [{"id": room.id, "name": room.name} for room in rooms]
+            return [{"id": room.id, "name": room.name, "capacity": room.capacity} for room in rooms]
 
 
     @staticmethod

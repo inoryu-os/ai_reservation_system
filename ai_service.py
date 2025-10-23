@@ -114,13 +114,14 @@ class AIService:
                     "type": "function",
                     "function": {
                         "name": "find_available_rooms",
-                        "description": "指定の開始時刻と利用時間で空いている会議室を検索する。ユーザーが部屋を指定せずに予約したい場合は必ずこの関数を最初に呼び出してください。",
+                        "description": "指定の開始時刻と利用時間で空いている会議室を検索する。ユーザーが部屋を指定せずに予約したい場合は必ずこの関数を最初に呼び出してください。定員条件（○人以上、○人入る、など）が指定された場合は必ずmin_capacityパラメータを設定してください。",
                         "parameters": {
                             "type": "object",
                             "properties": {
                                 "date": {"type": "string", "description": "予約日 (YYYY-MM-DD形式)"},
                                 "start_time": {"type": "string", "description": "開始時刻 (HH:MM形式、例: 14:00)"},
-                                "duration_minutes": {"type": "integer", "description": "利用時間（分単位、例: 60分=1時間）"}
+                                "duration_minutes": {"type": "integer", "description": "利用時間（分単位、例: 60分=1時間）"},
+                                "min_capacity": {"type": "integer", "description": "最低収容人数。ユーザーが「○人以上」「○人入る」などの条件を指定した場合に使用。指定がない場合は省略可能。"}
                             },
                             "required": ["date", "start_time", "duration_minutes"]
                         }
@@ -218,9 +219,17 @@ class AIService:
 
 - 具体的な時刻が指定された場合も、必ず30分刻みの時刻（例: 14:00, 14:30, 15:00）を使用してください
 
+定員条件の処理（重要）:
+- ユーザーが「○人以上」「○人入る部屋」などの条件を指定した場合:
+  * find_available_rooms関数を呼び出す際に、必ずmin_capacityパラメータを設定してください
+  * 例: 「10人以上入れる部屋」→ min_capacity: 10
+  * 例: 「15人で使いたい」→ min_capacity: 15
+  * 例: 「20人収容できる」→ min_capacity: 20
+
 予約処理のフロー（必ず以下の順序で実行）:
 1. ユーザーが会議室を指定していない場合:
    - 必ずfind_available_rooms関数で空き部屋を検索してください
+   - 定員条件がある場合は、min_capacityパラメータを必ず設定してください
    - 検索結果をユーザーに提示してください
    - ユーザーが部屋を選択してから予約を実行してください
 
@@ -412,6 +421,7 @@ class AIService:
             date = args.get("date")
             start_time = args.get("start_time")
             duration = int(args.get("duration_minutes")) if args.get("duration_minutes") is not None else None
+            min_capacity = int(args.get("min_capacity")) if args.get("min_capacity") is not None else None
 
             if not all([date, start_time, duration]):
                 return {
@@ -420,12 +430,18 @@ class AIService:
                 }
 
             rooms = ReservationService.find_available_rooms_by_start_datetime_and_duration(date, start_time, duration)
+
+            # min_capacityが指定されている場合、定員でフィルタリング
+            if min_capacity is not None:
+                rooms = [room for room in rooms if room.get("capacity", 0) >= min_capacity]
+
             return {
                 "success": True,
                 "rooms": rooms,
                 "date": date,
                 "start_time": start_time,
-                "duration_minutes": duration
+                "duration_minutes": duration,
+                "min_capacity": min_capacity
             }
         except Exception as e:
             return {

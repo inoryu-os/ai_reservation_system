@@ -1,0 +1,307 @@
+/**
+ * コンパクトレイアウト - 予約表全体をスクロールなしで表示
+ */
+
+/* ========================================
+   ビューポート高さベースのレイアウト
+   ======================================== */
+body, html {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+}
+
+main.container-fluid {
+    height: calc(100vh - 56px); /* navbarの高さ分引く */
+    overflow: hidden;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+}
+
+main > .row {
+    height: 100%;
+    margin: 0;
+}
+
+/* ========================================
+   左側カラム(予約システム全体)
+   ======================================== */
+.left-main-column {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* ========================================
+   上段セクション(カレンダー + フォーム)
+   ======================================== */
+.top-section {
+    flex-shrink: 0;
+    margin-bottom: 0.5rem !important;
+}
+
+/* カレンダーカード */
+.calendar-card .card-header {
+    padding: 0.4rem 0.5rem;
+}
+
+.calendar-card .card-header .h6 {
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+.calendar-card .card-header .btn-sm {
+    padding: 0.15rem 0.4rem;
+    font-size: 0.75rem;
+}
+
+.calendar-card .card-body {
+    padding: 0.4rem;
+}
+
+.calendar-table {
+    font-size: 0.7rem;
+    margin-bottom: 0;
+}
+
+.calendar-table th,
+.calendar-table td {
+    padding: 0.15rem !important;
+}
+
+/* 予約フォームカード */
+.booking-form-card .card-header {
+    padding: 0.4rem 0.75rem;
+}
+
+.booking-form-card .card-header .h6 {
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+.booking-form-card .card-body {
+    padding: 0.5rem 0.75rem;
+}
+
+.booking-form-card .form-label {
+    margin-bottom: 0.2rem;
+    font-size: 0.8rem;
+}
+
+.booking-form-card .form-select,
+.booking-form-card .form-control {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.85rem;
+}
+
+.booking-form-card .mb-3 {
+    margin-bottom: 0.4rem !important;
+}
+
+.booking-form-card .btn {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.85rem;
+}
+
+/* ========================================
+   予約表セクション
+   ======================================== */
+.reservation-table-card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.reservation-table-card .card-header {
+    padding: 0.4rem 0.75rem;
+    flex-shrink: 0;
+}
+
+.reservation-table-card .card-header .h6 {
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+.reservation-table-card .card-body {
+    flex: 1;
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.reservation-table-card .table-responsive {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: auto;
+}
+
+/* 予約テーブルのコンパクト化 */
+.booking-table {
+    font-size: 0.75rem;
+    margin-bottom: 0;
+}
+
+.booking-table thead th {
+    padding: 0.35rem 0.4rem;
+    font-size: 0.75rem;
+    position: sticky;
+    top: 0;
+    background-color: #d1ecf1;
+    z-index: 10;
+    border: 1px solid #bee5eb;
+    vertical-align: middle;
+}
+
+.booking-table tbody td {
+    padding: 0.25rem 0.3rem;
+    font-size: 0.7rem;
+    vertical-align: middle;
+    height: 28px; /* セルの高さを固定 */
+    min-height: 28px;
+    max-height: 28px;
+}
+
+/* 時間列 */
+.booking-table tbody td:first-child {
+    font-weight: 500;
+    background-color: #f8f9fa;
+    white-space: nowrap;
+}
+
+/* 予約セル */
+.booking-cell {
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.booking-cell:hover {
+    background-color: #e9ecef;
+}
+
+/* 予約コンテンツ */
+.booking-reserved {
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* キャンセルボタン */
+.cancel-btn {
+    padding: 0.1rem 0.3rem;
+    font-size: 0.65rem;
+    line-height: 1;
+    margin-left: 0.2rem;
+}
+
+/* 部屋ヘッダー */
+.room-header {
+    font-size: 0.75rem;
+}
+
+.room-header small {
+    font-size: 0.65rem;
+}
+
+/* ========================================
+   右側カラム(AIチャット)
+   ======================================== */
+.right-chat-column {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.chat-card {
+    height: 100% !important;
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-card .card-header {
+    padding: 0.4rem 0.75rem;
+    flex-shrink: 0;
+}
+
+.chat-card .card-header .h6 {
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+.chat-card .card-body {
+    flex: 1;
+    min-height: 0;
+}
+
+.chat-messages {
+    max-height: none !important;
+}
+
+/* ========================================
+   レスポンシブ対応
+   ======================================== */
+@media (max-width: 1199px) {
+    /* タブレット以下では通常のスクロールレイアウトに戻す */
+    body, html {
+        overflow: auto;
+    }
+
+    main.container-fluid {
+        height: auto;
+        overflow: auto;
+    }
+
+    .left-main-column {
+        height: auto;
+    }
+
+    .reservation-table-card {
+        flex: none;
+    }
+
+    .chat-card {
+        height: 600px !important;
+    }
+}
+
+@media (min-width: 1400px) {
+    /* フルスクリーン時はさらにコンパクトに */
+    .booking-table {
+        font-size: 0.8rem;
+    }
+
+    .booking-table tbody td {
+        height: 30px;
+        min-height: 30px;
+        max-height: 30px;
+    }
+}
+
+/* ========================================
+   スクロールバーのスタイリング
+   ======================================== */
+.table-responsive::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
